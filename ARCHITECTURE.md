@@ -2,7 +2,7 @@
 
 ## Overview
 
-A production-ready RAG (Retrieval-Augmented Generation) pipeline designed to process 100+ academic research PDFs, extract structured metadata, build a knowledge graph, and provide accurate answers with proper citations.
+A production-ready RAG pipeline designed to process 100+ academic research PDFs, extract structured metadata, build a knowledge graph, and provide accurate answers with **validated citations**.
 
 ---
 
@@ -17,39 +17,133 @@ A production-ready RAG (Retrieval-Augmented Generation) pipeline designed to pro
 │     ├─► pymupdf4llm                                             │
 │     │   • Fast Markdown conversion                              │
 │     │   • Table structure (markdown tables)                      │
-│     │   • Formula detection (LaTeX output)                       │
-│     │   • Layout preservation                                   │
-│     │   • OCR for scanned PDFs                                  │
-│     │   • No GPU required                                       │
+│     │   • Formula detection (LaTeX output)                      │
+│     │   • OCR for scanned PDFs                                 │
+│     │   • No GPU required                                      │
 │     │                                                           │
-│     └─► PDFx                                                    │
-│         • Author extraction                                     │
-│         • Reference list extraction                             │
-│         • DOI extraction                                        │
-│         • Citation extraction (author, year, title)              │
-│         • Builds citation_map.json                              │
+│     └─► Metadata Extraction                                      │
+│         ├─► LLM (gemini-3.5-flash)                            │
+│         │   • First ~1500 chars of content                     │
+│         │   • Extracts: title, authors, year, abstract         │
+│         │                                                       │
+│         └─► PDFx (references only)                              │
+│             • Bibliography extraction                            │
 │                                                                 │
-│  2. THE RAG ENGINE                                              │
-│     ├─► LightRAG                                                │
-│     │   • Entity extraction                                     │
-│     │   • Knowledge graph construction                          │
-│     │   • Citation support (file_paths)                         │
-│     │                                                           │
-│     └─► Reranker: cohere/rerank-4-fast                          │
-│         • Improves retrieval quality (15-25%)                   │
+│  2. CITATION MAP                                                │
+│     └─► citation_map.json                                       │
+│         • filename → {title, authors, year, abstract}           │
+│         • Source of truth for citation validation                │
 │                                                                 │
-│  3. BRAIN & INDEX                                               │
-│     ├─► qwen/qwen3-embedding-8b                                 │
-│     │   • 8B parameter embedding model                          │
-│     │   • High-quality semantic representations                 │
-│     │   • Optimized for retrieval tasks                         │
+│  3. RAG ENGINE                                                  │
+│     ├─► LightRAG (naive mode)                                 │
+│     │   • Vector similarity search                              │
+│     │   • Returns chunks with reference_id                      │
 │     │                                                           │
-│     └─► gemini-2.0-flash                                        │
-│         • 1M context window                                     │
-│         • Fast and cost-effective                               │
+│     └─► gemini-3.5-flash                                       │
+│         • Second LLM call for structured answer                │
+│                                                                 │
+│  4. CITATION VALIDATION                                          │
+│     └─► query_with_citations()                                 │
+│         • Validates LLM citations against citation_map.json     │
+│         • Catches hallucinations                                │
+│         • Returns structured answer with verified citations     │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Data Flow
+
+```
+PDFs
+  │
+  ▼
+parse_single_pdf() ──────────────────────────────────────────┐
+  │                                                             │
+  ├─► pymupdf4llm.to_markdown() → content                      │
+  │                                                             │
+  ├─► extract_references_with_pdfx() → references               │
+  │                                                             │
+  └─► first_page_snippet (for metadata extraction)               │
+                                                                │
+  ▼
+extract_metadata_batch() ─────────────────────────────────────┐
+  │                                                             │
+  └─► LLM (gemini-3.5-flash)                                  │
+        • Extracts: title, authors, year, abstract             │
+        • Returns ParsedPDF with metadata                       │
+                                                                │
+  ▼
+Build citation_map.json ──────────────────────────────────────┐
+  │                                                             │
+  └─► {filename: {title, authors, year, abstract, ...}}        │
+      • Source of truth for citation validation                 │
+                                                                │
+  ▼
+LightRAG.insert() ────────────────────────────────────────────┐
+  │                                                             │
+  └─► Chunks indexed with qwen/qwen3-embedding-8b              │
+                                                                │
+  ▼
+query_with_citations() ──────────────────────────────────────┐
+  │                                                             │
+  ├─► LightRAG.aquery() → chunks with reference_id             │
+  │                                                             │
+  ├─► LLM (gemini-3.5-flash)                                  │
+  │     • "Return JSON: {answer, citations:[{chunk_id, quote}]}" │
+  │                                                             │
+  └─► VALIDATION against citation_map.json                     │
+        • Maps reference_id → filename → {title, authors, year} │
+        • Catches hallucinations (LLM may cite wrong chunk)     │
+        • Returns structured answer with verified citations     │
+```
+
+---
+
+## Citation Validation Flow
+
+### Problem
+LLM may hallucinate citations - cite chunks that don't exist, wrong authors, or wrong metadata.
+
+### Solution
+Two-layer validation:
+
+1. **Chunk existence check**: LLM cites `chunk_id` → verify chunk exists in retrieved chunks
+2. **Metadata validation**: filename → lookup in `citation_map.json` → verify author/year/title
+
+### Example
+
+**LLM returned:**
+```json
+{
+  "answer": "The main themes include... [1], [2]",
+  "citations": [
+    {"chunk_id": 1, "quote": "Some text about..."},
+    {"chunk_id": 5, "quote": "More text..."}
+  ]
+}
+```
+
+**Validation process:**
+```
+chunk_id=1 → ref_id from chunk → filename → citation_map.json
+  → Authors: ["Dr Urmila Devi"], Year: "2021"
+  → Validated: [Dr Urmila Devi (2021)]
+
+chunk_id=5 → ref_id from chunk → filename → citation_map.json
+  → Authors: ["Naved Alam", "Md. Rizwan Khan", ...], Year: null
+  → Validated: [Naved Alam et al. (n.d.)]
+```
+
+### Hallucination Detection
+
+| Hallucination Type | Detection Method | Result |
+|--------------------|-----------------|--------|
+| LLM cites non-existent chunk | Check chunk_id < len(chunks) | Flag as "unknown" |
+| LLM cites wrong chunk_id | Match chunk_id to actual ref_id | Use actual filename |
+| Author name wrong | Compare to citation_map.json | Replace with correct |
+| Year wrong/missing | Compare to citation_map.json | Replace with correct (or "n.d.") |
 
 ---
 
@@ -62,353 +156,176 @@ A production-ready RAG (Retrieval-Augmented Generation) pipeline designed to pro
 | Feature | Status |
 |---------|--------|
 | Multi-column text extraction | ✅ Supported |
-| Table structure extraction | ✅ Supported (Markdown tables) |
-| Formula recognition | ✅ Supported (LaTeX output) |
-| Layout preservation | ✅ Supported |
+| Table structure extraction | ✅ Markdown tables |
+| Formula recognition | ✅ LaTeX output |
 | OCR for scanned PDFs | ✅ Supported |
-| Fast Markdown conversion | ✅ 10-250× faster than vision-based |
-| No GPU required | ✅ Runs on any machine |
-| Reference extraction | ❌ Use PDFx for this |
+| Fast conversion | ✅ 10-250× faster than vision-based |
+| No GPU required | ✅ |
 
-**Installation:**
-```bash
-pip install pymupdf4llm
-```
+#### Metadata Extraction (LLM + PDFx)
 
-**Usage:**
-```python
-import pymupdf4llm
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Title extraction | ✅ LLM | First ~1500 chars |
+| Author extraction | ✅ LLM | Handles multiple authors |
+| Year extraction | ✅ LLM | From first page text |
+| Abstract extraction | ✅ LLM | First paragraph |
+| References list | ✅ PDFx | Bibliography extraction |
+| PDF metadata fields | ❌ Empty | Academic papers rarely fill these |
 
-md = pymupdf4llm.to_markdown("paper.pdf")
+**Key Finding:** Academic papers leave PDF metadata fields empty. Metadata lives in paper text.
 
-# With page chunks for RAG
-chunks = pymupdf4llm.to_markdown("paper.pdf", page_chunks=True)
-```
+**Cost:** ~$0.001 per paper (gemini-3.5-flash)
 
-#### PDFx (Metadata Extractor)
+---
 
-| Feature | Status |
-|---------|--------|
-| Author extraction | ✅ Supported |
-| Reference list extraction | ✅ Supported |
-| DOI extraction | ✅ Supported |
-| Citation format parsing | ✅ Supported (APA, MLA, IEEE) |
-| No regex needed | ✅ Automatic |
+### 2. Citation Map
 
-**Installation:**
-```bash
-pip install pdfx
-```
+#### citation_map.json
 
-**Usage:**
-```python
-from pdfx import PDFx
+Built from parsed PDFs, serves as ground truth for citation validation.
 
-pdfx = PDFx("paper.pdf")
-metadata = pdfx.get_metadata()
-references = pdfx.get_references()
-```
-
-**Output Format:**
 ```json
 {
-  "title": "Paper Title",
-  "authors": ["Author One", "Author Two"],
-  "year": "2024",
-  "doi": "10.1234/example",
-  "references": [
-    {
-      "authors": ["Cite Author"],
-      "title": "Cited Paper",
-      "year": "2023"
-    }
-  ]
+  "CET-JJ21-8-Dr-Unrmila-Devi.pdf": {
+    "title": "Social and Political Aspects by Khushwant Singh",
+    "authors": ["Dr Urmila Devi"],
+    "year": "2021",
+    "abstract": "Social and political worries in his works...",
+    "references": []
+  },
+  "English.pdf": {
+    "title": "Exploring the Literary Contributions of Kushwant Singh...",
+    "authors": ["Naved Alam", "Md. Rizwan Khan", "Faizur Rehman Sherwani", "Rehan Khan"],
+    "year": null,
+    "abstract": "This research paper aims to analyze...",
+    "references": []
+  }
 }
 ```
 
 ---
 
-### 2. RAG Engine
+### 3. RAG Engine
 
-#### LightRAG
+#### LightRAG (Naive Mode)
 
-| Feature | Status |
-|---------|--------|
-| Entity extraction | ✅ Supported |
-| Knowledge graph construction | ✅ Supported |
-| Citation support (file_paths) | ✅ Supported |
-| Multiple query modes | ✅ Supported |
-| Reranker integration | ✅ Supported |
-
-**Query Modes:**
-- `local`: Context-dependent retrieval focused on specific entities
-- `global`: Community/summary-based broad knowledge retrieval
-- `hybrid`: Combines local and global
-- `naive`: Direct vector search without graph
-- `mix`: Integrates KG and vector retrieval (recommended with reranker)
-
-**Installation:**
-```bash
-pip install lightrag-hku
-```
-
-**Usage:**
-```python
-from lightrag import LightRAG
-from lightrag import QueryParam
-
-rag = LightRAG(
-    working_dir="./working_dir",
-    llm_model_func=llm_model_func,
-    embedding_func=embedding_func,
-    addon_params={
-        "chunk_token_size": 1000,
-        "language": "English",
-    },
-)
-
-# Insert with file paths for citation
-rag.insert(
-    documents=[content],
-    file_paths=["paper.pdf"]
-)
-
-# Query with mix mode
-result = rag.query(
-    "Your question",
-    param=QueryParam(mode="mix")
-)
-```
-
-**LLM Requirements:**
-- Minimum: 32B parameter model
-- Context: 32KB minimum (64KB recommended)
-- Avoid reasoning models during indexing
-
-#### Reranker: cohere/rerank-4-fast
+Used for vector similarity search. Naive mode = no entity extraction = faster indexing.
 
 | Feature | Status |
 |---------|--------|
-| Retrieval quality improvement | ✅ 15-25% |
-| Integration with LightRAG | ✅ Supported |
-| Fast inference | ✅ Optimized for speed |
+| Vector similarity search | ✅ |
+| Chunk retrieval | ✅ Returns chunks with reference_id |
+| Naive mode (no KG) | ✅ Faster for Q&A |
 
-**Why Add Reranker:**
-- Significantly improves retrieval quality
-- Re-ranks retrieved chunks by relevance
-- Recommended for production use
+#### Query Response Format
 
----
+LightRAG returns context with `reference_id`:
 
-### 3. Brain & Index
-
-#### qwen/qwen3-embedding-8b (via OpenRouter)
-
-| Feature | Status |
-|---------|--------|
-| Parameters | 8B |
-| Access via | OpenRouter API |
-| API Key | OPENROUTER_API_KEY |
-
-**Why qwen3-embedding-8b:**
-- Large parameter count (8B) for better semantic understanding
-- Optimized for retrieval tasks
-- High-quality vector representations
-
-**Configuration:**
-```python
-# Using OpenRouter API for embeddings
-import openrouter
-
-client = openrouter.OpenAI(api_key=os.environ["OPENROUTER_API_KEY"])
-
-def embed_text(text):
-    response = client.embeddings.create(
-        model="qwen/qwen3-embedding-8b",
-        input=text
-    )
-    return response.data[0].embedding
-```
-
-#### gemini-2.0-flash
-
-| Feature | Status |
-|---------|--------|
-| Context window | 1M tokens |
-| Speed | ✅ Fast |
-| Cost | ✅ Low |
-| Tool use | ✅ Supported |
-
-**Usage:**
-```python
-import google.generativeai as genai
-
-llm = genai.GenerativeModel('gemini-2.0-flash')
-response = llm.generate_content(prompt)
+```json
+[
+  {"reference_id": "1", "content": "First chunk text..."},
+  {"reference_id": "2", "content": "Second chunk text..."}
+]
 ```
 
 ---
 
-## Data Flow
+### 4. Citation Validation
 
-```
-PDFs
-  ↓
-Marker-PDF ─────► Content (Markdown, tables, formulas)
-PDFx ──────────► Metadata (authors, refs) ──► citation_map.json
-  ↓
-LightRAG ──────► Knowledge Graph (qwen3-embedding-8b for vectors)
-  ↓
-Query ─────────► LLM (gemini-2.0-flash) ──► Answer + Citations
-                ↘
-                 cohere/rerank-4-fast (re-rank results)
-```
+#### query_with_citations()
 
----
-
-## Citation Chain Mapping
-
-### Problem
-LightRAG uses file paths for citations, but academic papers need full citations (author, title, journal, year, DOI).
-
-### Solution
-PDFx extracts full citation metadata → stored in `citation_map.json` → enriched on query.
-
-### Implementation
+Main function for querying with validated citations.
 
 ```python
-import json
-from pathlib import Path
-from pdfx import PDFx
-
-def build_citation_map(pdf_dir: str) -> dict:
-    citation_map = {}
-    
-    for pdf_path in Path(pdf_dir).glob("*.pdf"):
-        pdfx = PDFx(str(pdf_path))
-        
-        metadata = pdfx.get_metadata()
-        references = pdfx.get_references()
-        
-        ref_keys = []
-        for ref in references:
-            author = ref.get("authors", ["Unknown"])[0]
-            year = ref.get("year", "n.d.")
-            key = f"{author}-{year}"
-            ref_keys.append(key)
-        
-        citation_map[pdf_path.name] = {
-            "title": metadata.get("title", "Unknown"),
-            "authors": metadata.get("authors", []),
-            "year": metadata.get("year", "n.d."),
-            "doi": metadata.get("doi", ""),
-            "reference_keys": ref_keys
+async def query_with_citations(
+    rag,
+    llm_func,
+    query: str,
+    citation_map_path: str = "citation_map.json",
+    top_k: int = 5
+) -> dict:
+    """
+    Returns:
+        {
+            "answer": "The main themes are...",
+            "citations": [
+                {
+                    "chunk_id": 1,
+                    "source": "CET-JJ21-8-Dr-Unrmila-Devi.pdf",
+                    "author": "Dr Urmila Devi",
+                    "year": "2021",
+                    "title": "Social and Political Aspects...",
+                    "quote": "Relevant quote from chunk..."
+                }
+            ]
         }
-    
-    with open("citation_map.json", "w") as f:
-        json.dump(citation_map, f, indent=2)
-    
-    return citation_map
-
-def query_with_citations(query: str, rag, citation_map):
-    result = rag.query(query, param=QueryParam(mode="mix"))
-    
-    enriched_sources = []
-    for file_path in result.get("sources", []):
-        filename = Path(file_path).name
-        if filename in citation_map:
-            enriched_sources.append(citation_map[filename])
-    
-    return {
-        "answer": result["answer"],
-        "citations": enriched_sources
-    }
-```
-
----
-
-## Installation
-
-```bash
-# Core dependencies
-pip install pymupdf4llm pdfx lightrag-hku
-
-# API Clients
-pip install openai
-
-# Utilities
-pip install python-dotenv tqdm
+    """
 ```
 
 ---
 
 ## Configuration
 
-### LightRAG Configuration
+### Environment
+
+```bash
+OPENROUTER_API_KEY=your_key
+```
+
+### Key Functions
+
+| Function | Purpose |
+|----------|---------|
+| `parse_single_pdf(pdf_path)` | Parse PDF, extract content + references |
+| `extract_metadata_batch(docs, llm_func)` | Async batch metadata extraction |
+| `initialize_lightrag(working_dir)` | Initialize LightRAG |
+| `query_with_citations(rag, llm_func, query)` | Query with validated citations |
+
+### Usage Example
 
 ```python
-from lightrag import LightRAG
-
-rag = LightRAG(
-    working_dir="./working_dir",
-    llm_model_func=llm_model_func,
-    embedding_func=embedding_func,
-    addon_params={
-        "chunk_token_size": 1000,
-        "language": "English",
-        "entity_type_prompt_file": "entity_type_prompt.sample.yml",
-        "entity_types_guidance": "- Paper: academic papers, reports",
-        "chunker": {
-            "chunk_token_size": 1000,
-            "recursive_character": {
-                "separators": ["\n\n", "\n", "。", "！", "？", " "]
-            }
-        },
-    },
+import asyncio
+from src.config import (
+    initialize_lightrag,
+    create_llm_func,
+    extract_metadata_batch
 )
-```
+from src.parser import parse_single_pdf
 
-### Embedding Configuration (OpenRouter)
+async def main():
+    # 1. Parse and extract metadata
+    doc = parse_single_pdf("paper.pdf")
+    llm_func = create_llm_func()
+    docs = await extract_metadata_batch([doc], llm_func)
 
-```python
-import os
-import openrouter
+    # 2. Build citation_map.json
+    citation_map = {d.filename: {
+        "title": d.metadata.title,
+        "authors": d.metadata.authors,
+        "year": d.metadata.year,
+        ...
+    } for d in docs}
+    json.dump(citation_map, open("citation_map.json", "w"))
 
-client = openrouter.OpenAI(api_key=os.environ["OPENROUTER_API_KEY"])
+    # 3. Initialize LightRAG and insert
+    config = await initialize_lightrag("./working_dir")
+    rag = config["rag"]
+    await rag.ainsert(doc.content, file_paths=[doc.filename])
 
-def embed_text(text):
-    response = client.embeddings.create(
-        model="qwen/qwen3-embedding-8b",
-        input=text
+    # 4. Query with citations
+    result = await query_with_citations(
+        rag, llm_func,
+        "What are the main themes?",
+        citation_map_path="citation_map.json"
     )
-    return response.data[0].embedding
 
-def embed_query(query):
-    response = client.embeddings.create(
-        model="qwen/qwen3-embedding-8b",
-        input=query
-    )
-    return response.data[0].embedding
-```
+    print(result["answer"])
+    for cit in result["citations"]:
+        print(f"  [{cit['chunk_id']}] {cit['author']} ({cit['year']})")
+        print(f"      {cit['title']}")
 
-### Reranker Configuration (Cohere via OpenRouter)
-
-```python
-# Using Cohere rerank-4-fast via OpenRouter
-import openrouter
-
-client = openrouter.OpenAI(api_key=os.environ["OPENROUTER_API_KEY"])
-
-def rerank(query, documents, top_n=5):
-    # Cohere rerank model via OpenRouter chat endpoint
-    response = client.chat.completions.create(
-        model="cohere/rerank-4-fast",
-        messages=[
-            {"role": "system", "content": "Rate document relevance (0-1)."},
-            {"role": "user", "content": f"Query: {query}\n\nDocuments:\n" + "\n".join([f"{i}. {doc}" for i, doc in enumerate(documents)])}
-        ]
-    )
-    return response.choices[0].message.content
+asyncio.run(main())
 ```
 
 ---
@@ -416,14 +333,15 @@ def rerank(query, documents, top_n=5):
 ## Status Summary
 
 | Component | Status | Notes |
-|-----------|--------|-------|
+|----------|--------|-------|
 | pymupdf4llm | ✅ Complete | Primary content extractor |
-| PDFx | ✅ Complete | Metadata + citation extraction |
-| LightRAG | ✅ Complete | KG construction |
-| Reranker | ✅ Complete | cohere/rerank-4-fast via OpenRouter |
-| Embeddings | ✅ Complete | qwen/qwen3-embedding-8b via OpenRouter |
-| LLM | ✅ Complete | gemini-2.0-flash via OpenRouter |
-| Citation mapping | ✅ Complete | PDFx + citation_map.json |
+| LLM metadata | ✅ Complete | gemini-3.5-flash |
+| PDFx references | ✅ Complete | Bibliography only |
+| citation_map.json | ✅ Complete | Ground truth for validation |
+| LightRAG | ✅ Complete | Naive mode for Q&A |
+| Embeddings | ✅ Complete | qwen/qwen3-embedding-8b |
+| Citation validation | ✅ Complete | Catches hallucinations |
+| query_with_citations | ✅ Complete | Returns structured citations |
 
 **Architecture: 100% Resolved**
 
@@ -434,9 +352,7 @@ def rerank(query, documents, top_n=5):
 - [pymupdf4llm GitHub](https://github.com/pymupdf/pymupdf4llm)
 - [LightRAG GitHub](https://github.com/HKUDS/LightRAG)
 - [PDFx Documentation](https://github.com/metachris/pdfx)
-- [Cohere Rerank via OpenRouter](https://openrouter.ai/cohere/rerank-4-fast)
 - [OpenRouter API](https://openrouter.ai/docs)
-- [Qwen3 Embedding](https://huggingface.co/Qwen/Qwen3-Embedding-8B)
 
 ---
 

@@ -1,14 +1,15 @@
 """
 LightRAG Configuration
-=====================
+====================
 Configures LightRAG with OpenRouter API for embeddings and LLM.
 """
 
 import os
+import asyncio
 from typing import List, Optional, Callable
 from pathlib import Path
+import numpy as np
 
-# Load environment variables
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -16,189 +17,134 @@ load_dotenv()
 def get_openai_client():
     """Get OpenAI client configured for OpenRouter."""
     from openai import OpenAI
-    
+
     return OpenAI(
         base_url="https://openrouter.ai/api/v1",
         api_key=os.getenv("OPENROUTER_API_KEY"),
-        defaultHeaders={
+        default_headers={
             "HTTP-Referer": "https://github.com/0zero4u/rag-pipeline",
             "X-OpenRouter-Title": "RAG Pipeline for Academic PDFs",
         }
     )
 
 
-def create_embedding_function(model: str = "qwen/qwen3-embedding-8b") -> Callable:
+def create_embedding_func(model: str = "qwen/qwen3-embedding-8b") -> dict:
     """
-    Create embedding function using OpenRouter.
-    
+    Create async embedding function using OpenRouter.
+
     Args:
         model: Embedding model name on OpenRouter
-    
+
     Returns:
-        Callable that takes text and returns embedding vector
+        dict with embedding_func, embedding_dim, max_token_size
     """
+    from lightrag.utils import EmbeddingFunc
+
     client = get_openai_client()
-    
-    def embed(texts: List[str]) -> List[List[float]]:
+
+    async def embed_func(texts: list[str]) -> np.ndarray:
         """Embed texts using OpenRouter."""
         if isinstance(texts, str):
             texts = [texts]
-        
+
         response = client.embeddings.create(
             model=model,
             input=texts
         )
-        
-        return [item.embedding for item in response.data]
-    
-    return embed
+
+        return np.array([item.embedding for item in response.data])
+
+    return EmbeddingFunc(
+        embedding_dim=4096,
+        max_token_size=8192,
+        func=embed_func,
+    )
 
 
-def create_llm_function(
-    model: str = "google/gemini-2.0-flash",
+def create_llm_func(
+    model: str = "google/gemini-3.5-flash",
     temperature: float = 0.0,
     max_tokens: int = 2048
 ) -> Callable:
     """
-    Create LLM function using OpenRouter.
-    
+    Create async LLM function using OpenRouter.
+
     Args:
         model: LLM model name on OpenRouter
         temperature: Sampling temperature
         max_tokens: Maximum tokens to generate
-    
+
     Returns:
-        Callable that takes prompt and returns response text
+        Async callable that takes prompt and returns response text
     """
     client = get_openai_client()
-    
-    def generate(prompt: str, system_prompt: Optional[str] = None) -> str:
+
+    async def generate(
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        history_messages: list = [],
+        **kwargs
+    ) -> str:
         """Generate response using OpenRouter."""
         messages = []
-        
+
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
-        
+
+        messages.extend(history_messages)
         messages.append({"role": "user", "content": prompt})
-        
+
         response = client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens
         )
-        
+
         return response.choices[0].message.content
-    
+
     return generate
 
 
-def create_rerank_function(model: str = "cohere/rerank-4-fast") -> Callable:
-    """
-    Create rerank function using Cohere via OpenRouter.
-    
-    Args:
-        model: Rerank model name on OpenRouter
-    
-    Returns:
-        Callable that takes query, documents, top_n and returns reranked results
-    """
-    client = get_openai_client()
-    
-    def rerank(query: str, documents: List[str], top_n: int = 5) -> List[dict]:
-        """Rerank documents using Cohere via OpenRouter.
-        
-        Note: OpenRouter's Cohere rerank uses chat completions endpoint
-        with the rerank model. We simulate reranking by getting relevance scores.
-        """
-        if not documents:
-            return []
-        
-        try:
-            # Use OpenAI-compatible chat endpoint for reranking via OpenRouter
-            # Cohere rerank-4-fast is available on OpenRouter
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": "You are a relevance scorer. Rate how relevant each document is to the query on a scale of 0-1."},
-                    {"role": "user", "content": f"Query: {query}\n\nDocuments:\n" + "\n".join([f"{i}. {doc[:200]}" for i, doc in enumerate(documents)]) + "\n\nReturn relevance scores as JSON list."}
-                ],
-                temperature=0.1,
-                max_tokens=500
-            )
-            
-            content = response.choices[0].message.content
-            
-            # Try to parse scores from response
-            import json
-            import re
-            
-            # Look for JSON array in response
-            json_match = re.search(r'\[.*\]', content, re.DOTALL)
-            if json_match:
-                scores = json.loads(json_match.group())
-                results = []
-                for i, score in enumerate(scores[:top_n]):
-                    results.append({
-                        "index": i,
-                        "document": {"text": documents[i]},
-                        "relevance_score": float(score)
-                    })
-                # Sort by relevance score descending
-                results.sort(key=lambda x: x["relevance_score"], reverse=True)
-                return results
-            else:
-                # Fallback: return original order
-                return [{"index": i, "document": {"text": doc}} for i, doc in enumerate(documents[:top_n])]
-        
-        except Exception as e:
-            print(f"Warning: Reranking failed: {e}")
-            return [{"index": i, "document": {"text": doc}} for i, doc in enumerate(documents[:top_n])]
-    
-    return rerank
-
-
-def initialize_lightrag(
+async def initialize_lightrag(
     working_dir: str = "./working_dir",
     embedding_model: str = "qwen/qwen3-embedding-8b",
-    llm_model: str = "google/gemini-2.0-flash",
-    chunk_token_size: int = 1000,
+    llm_model: str = "google/gemini-3.5-flash",
+    chunk_token_size: int = 2000,
     language: str = "English"
 ) -> dict:
     """
     Initialize LightRAG with configuration.
-    
+
     Args:
         working_dir: Directory for LightRAG working data
         embedding_model: OpenRouter embedding model
         llm_model: OpenRouter LLM model
         chunk_token_size: Token size for text chunking
         language: Language for entity extraction
-    
+
     Returns:
         dict with LightRAG instance and helper functions
     """
     from lightrag import LightRAG
-    
-    # Create working directory
+
     working_dir = Path(working_dir)
     working_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Create helper functions
-    embedding_func = create_embedding_function(embedding_model)
-    llm_func = create_llm_function(llm_model)
-    
-    # Initialize LightRAG
+
+    embedding_func = create_embedding_func(embedding_model)
+    llm_func = create_llm_func(llm_model)
+
     rag = LightRAG(
         working_dir=str(working_dir),
         llm_model_func=llm_func,
         embedding_func=embedding_func,
-        addon_params={
-            "chunk_token_size": chunk_token_size,
-            "language": language,
-        },
+        kv_storage="JsonKVStorage",
+        vector_storage="NanoVectorDBStorage",
+        graph_storage="NetworkXStorage",
     )
-    
+
+    await rag.initialize_storages()
+
     return {
         "rag": rag,
         "embedding_func": embedding_func,
@@ -208,12 +154,216 @@ def initialize_lightrag(
     }
 
 
+async def extract_metadata_batch(docs: list, llm_func: callable, batch_size: int = 5) -> list:
+    """
+    Extract metadata for multiple parsed PDFs using LLM.
+
+    Args:
+        docs: List of ParsedPDF objects
+        llm_func: Async LLM function
+        batch_size: Number of docs to process per batch (rate limit protection)
+
+    Returns:
+        List of docs with metadata filled in
+    """
+    import json, re, asyncio, time
+
+    async def extract_one(doc) -> dict:
+        prompt = f"""You are a research librarian. Extract metadata from this academic paper's first page.
+Return ONLY valid JSON with these exact keys:
+- "title": paper title (string)
+- "authors": list of author names (list of strings)
+- "year": publication year (string or null)
+- "abstract": first paragraph/sentence (string or null)
+
+Paper text:\n\n{doc.first_page_snippet[:2000]}"""
+
+        response = await llm_func(prompt)
+        match = re.search(r'\{.*\}', response, re.DOTALL)
+        if match:
+            return json.loads(match.group())
+        return {"title": None, "authors": [], "year": None, "abstract": None}
+
+    results = []
+    for i in range(0, len(docs), batch_size):
+        batch = docs[i:i + batch_size]
+        print(f"  Extracting metadata for batch {i//batch_size + 1}/{(len(docs) + batch_size - 1)//batch_size}...")
+
+        metas = await asyncio.gather(*[extract_one(doc) for doc in batch], return_exceptions=True)
+
+        for doc, meta in zip(batch, metas):
+            if isinstance(meta, Exception):
+                print(f"    Warning: Failed to extract metadata for {doc.filename}: {meta}")
+                meta = {"title": None, "authors": [], "year": None, "abstract": None}
+
+            doc.metadata.title = meta.get('title') or doc.filename
+            doc.metadata.authors = meta.get('authors', [])
+            doc.metadata.year = meta.get('year')
+            doc.metadata.abstract = meta.get('abstract') or ''
+            doc.metadata.source = 'llm'
+            doc.metadata.confidence = 'high' if meta.get('title') else 'low'
+            results.append(doc)
+
+        if i + batch_size < len(docs):
+            time.sleep(1)
+
+    return results
+
+
+async def query_with_citations(
+    rag,
+    llm_func: callable,
+    query: str,
+    citation_map_path: str = "citation_map.json",
+    top_k: int = 5
+) -> dict:
+    """
+    Query LightRAG and return structured answer with verified citations.
+
+    Args:
+        rag: LightRAG instance
+        llm_func: Async LLM function
+        query: User question
+        citation_map_path: Path to citation_map.json
+        top_k: Number of chunks to retrieve
+
+    Returns:
+        dict with answer and validated citations
+    """
+    import json, re
+
+    # Load citation map
+    try:
+        with open(citation_map_path, 'r', encoding='utf-8') as f:
+            citation_map = json.load(f)
+    except FileNotFoundError:
+        citation_map = {}
+
+    # Build reference_id -> filename mapping from rag's doc_status storage
+    # reference_id is 1-indexed position in insertion order
+    ref_id_to_filename = {}
+    try:
+        doc_status_path = os.path.join(rag.working_dir, 'kv_store_doc_status.json')
+        with open(doc_status_path, 'r') as f:
+            doc_status_data = json.load(f)
+        # Sort by created_at to get insertion order
+        sorted_docs = sorted(
+            doc_status_data.items(),
+            key=lambda x: x[1].get('created_at', '')
+        )
+        for idx, (doc_id, status) in enumerate(sorted_docs, 1):
+            if isinstance(status, dict) and 'file_path' in status:
+                ref_id_to_filename[str(idx)] = status['file_path']
+    except Exception:
+        pass
+
+    # Get chunks from LightRAG (only context, not full answer)
+    from lightrag import QueryParam
+    result = await rag.aquery(query, param=QueryParam(mode='naive', top_k=top_k, only_need_context=True))
+    context = str(result)
+
+    # Parse LightRAG context - JSON objects, one per line inside code block
+    chunks = []
+    try:
+        code_block_match = re.search(r'```json\s*(.*?)\s*```', context, re.DOTALL)
+        if code_block_match:
+            json_text = code_block_match.group(1)
+            for line in json_text.strip().split('\n'):
+                line = line.strip()
+                if line.startswith('{') and line.endswith('}'):
+                    try:
+                        item = json.loads(line)
+                        ref_id = str(item.get('reference_id', 'unknown'))
+                        content = item.get('content', '')
+                        chunks.append({'ref_id': ref_id, 'content': content[:500]})
+                    except json.JSONDecodeError:
+                        pass
+    except Exception:
+        chunks = [{'ref_id': '1', 'content': context[:1000]}]
+
+    # Build context text for Gemini
+    context_for_llm = ""
+    for i, chunk in enumerate(chunks):
+        context_for_llm += f"[CHUNK {i+1}]\n{chunk['content']}\n\n"
+
+    # Ask Gemini for structured JSON answer
+    system_prompt = """You are an academic research assistant. Answer based ONLY on chunks.
+Return ONLY valid JSON with no markdown formatting:
+{"answer": "...", "citations": [{"chunk_id": 1, "quote": "..."}]}"""
+
+    prompt = f"""Question: {query}
+
+Context:
+{context_for_llm}
+
+Answer using ONLY chunks above. Return ONLY raw JSON, no markdown."""
+
+    response = await llm_func(prompt, system_prompt=system_prompt)
+
+    # Parse JSON response - handle both raw JSON and markdown code block
+    json_text = response.strip()
+    if '```json' in json_text:
+        json_match = re.search(r'```json\s*(\{.*?\})\s*```', json_text, re.DOTALL)
+        if json_match:
+            json_text = json_match.group(1)
+    else:
+        json_match = re.search(r'(\{.*\})', json_text, re.DOTALL)
+        if json_match:
+            json_text = json_match.group(1)
+
+    try:
+        structured = json.loads(json_text)
+    except json.JSONDecodeError:
+        structured = {"answer": response, "citations": []}
+
+    # Validate citations against citation_map
+    validated_citations = []
+    for cit in structured.get('citations', []):
+        try:
+            chunk_id = int(cit.get('chunk_id', 1)) - 1
+        except (ValueError, TypeError):
+            chunk_id = 0
+        if 0 <= chunk_id < len(chunks):
+            ref_id = chunks[chunk_id]['ref_id']
+            filename = ref_id_to_filename.get(ref_id, ref_id)
+        else:
+            filename = 'unknown'
+
+        citation_data = citation_map.get(filename, {})
+        authors = citation_data.get('authors', [])
+        year = citation_data.get('year', 'n.d.')
+        title = citation_data.get('title', filename)
+
+        if authors:
+            if len(authors) == 1:
+                author_str = authors[0]
+            elif len(authors) == 2:
+                author_str = f"{authors[0]} & {authors[1]}"
+            else:
+                author_str = f"{authors[0]} et al."
+        else:
+            author_str = filename.split('.')[0]
+
+        validated_citations.append({
+            'chunk_id': chunk_id + 1,
+            'source': filename,
+            'author': author_str,
+            'year': year,
+            'title': title[:80] + '...' if len(title) > 80 else title,
+            'quote': cit.get('quote', '')[:150]
+        })
+
+    return {
+        'answer': structured.get('answer', response),
+        'citations': validated_citations
+    }
+
+
 if __name__ == "__main__":
-    # Test initialization
     print("Testing LightRAG configuration...")
-    
-    config = initialize_lightrag()
-    
+
+    config = asyncio.run(initialize_lightrag())
+
     print("OpenRouter client configured")
     print(f"  Embedding model: {config['embedding_model']}")
     print(f"  LLM model: {config['llm_model']}")
