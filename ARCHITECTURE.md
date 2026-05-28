@@ -662,6 +662,55 @@ asyncio.run(main())
 
 ---
 
+## 3-Agent Citation Pipeline
+
+### Workflow
+
+```
+1. LightRAGWriterAgent
+   └── Writes prose with [CHUNK-N] markers
+       └── Uses RAG via query_writer.py
+
+2. HumanizeAgent
+    └── Paraphrases prose, removes AI patterns
+        └── PRESERVES [CHUNK-N] markers
+            └── Does NOT use RAG (receives ready content)
+
+3. CitationAdderAgent
+    └── Converts [CHUNK-N] to MLA inline citations
+        └── Reads citation_map.json for metadata
+            └── Does NOT use RAG
+
+4. Validation (check_citations.py)
+    └── Verifies no orphaned [CHUNK-N] remain
+```
+
+### Agent Files
+
+| Agent | Location |
+|-------|----------|
+| LightRAGWriterAgent | `~/.config/opencode/agents/lightrag-writer-agent.md` |
+| HumanizeAgent | `~/.config/opencode/agents/humanize-agent.md` |
+| CitationAdderAgent | `~/.config/opencode/agents/citation-adder-agent.md` |
+
+### MLA Citation Format
+
+```(Author. Title. Publisher, Year.)```
+
+**Example:**
+```
+[CHUNK-5] → (Butalia, Urvashi. The Other Side of Silence. Penguin Books, 1998.)
+```
+
+### Validation Script
+
+```bash
+python3 check_citations.py /tmp/final_draft.md
+# Output: OK: No orphaned [CHUNK-N] markers found.
+```
+
+---
+
 ## Status Summary
 
 | Component | Status | Notes |
@@ -672,9 +721,12 @@ asyncio.run(main())
 | citation_map.json | ✅ Complete | Ground truth for validation |
 | LightRAG | ✅ Complete | Naive mode for Q&A |
 | Embeddings | ✅ Complete | perplexity/pplx-embed-v1-0.6b |
-| Citation validation | ✅ Complete | Catches hallucinations |
 | query_writer.py | ✅ Complete | chunk_index for citations |
 | validate_citations.py | ✅ Complete | --max-chunks flag |
+| check_citations.py | ✅ Complete | orphaned [CHUNK-N] validator |
+| LightRAGWriterAgent | ✅ Complete | writes with [CHUNK-N] |
+| HumanizeAgent | ✅ Complete | paraphrase, preserve markers |
+| CitationAdderAgent | ✅ Complete | MLA conversion |
 | Cohere Rerank | ❌ Not needed | LightRAG similarity sufficient |
 | auditor.py | ❌ Not used | validate_citations.py in use |
 
@@ -693,4 +745,4 @@ asyncio.run(main())
 
 ## Last Updated
 
-2026-05-28 (Multi-PDF retrieval, top_k behavior, cohere rerank not needed, auditor.py not used)
+2026-05-28 (3-agent citation pipeline: LightRAGWriter → Humanize → CitationAdder)
