@@ -30,7 +30,7 @@ ENV/
 env/
 
 # Working directories
-working_dir/
+working_dir*/
 data/processed/
 
 # IDE
