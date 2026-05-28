@@ -74,6 +74,13 @@ async def run_pipeline(
     print(f"Using embedding model: {embedding_model}")
     print(f"Using LLM model: {llm_model}")
     
+    # Save embedding model config for query_writer.py
+    import json as json_mod
+    config_path = working_dir / "config.json"
+    with open(config_path, 'w') as f:
+        json_mod.dump({"embedding_model": embedding_model, "llm_model": llm_model}, f)
+    print(f"Config saved to {config_path}")
+    
     # Step 4: Index documents
     import time
     print("\n[4/4] Indexing documents into LightRAG...")

@@ -17,13 +17,7 @@
       "abstract": "The historiography of the partition of the subcontinent results into the creation of many different facets of the society. The society at the time and before the time of partition faced the innumerable losses. The indelible marks on the face of society were not easily removed. All the historical events had a deeper influence on the minds of the people, writers and of the society. The proposed partition of the country left it to witness the upheaval of unimaginable proportions on the eve of independence. The communal riots engulfed the country.",
       "references": [
         {
-          "ref": "http://shodh.inflibnet.ac.in:8080/jspui/bitstream/123456789/751/3/03_literatur",
-          "reftype": "url",
-          "page": 6,
-          "pdf_regex": "\\.pdf(:?\\?.*)?$"
-        },
-        {
-          "ref": "http://www.academia.edu/4708846/Looking_at_Partition_through_Tamas",
+          "ref": "www.researchscholar.co.in",
           "reftype": "url",
           "page": 6,
           "pdf_regex": "\\.pdf(:?\\?.*)?$"
@@ -35,7 +29,13 @@
           "pdf_regex": "\\.pdf(:?\\?.*)?$"
         },
         {
-          "ref": "www.researchscholar.co.in",
+          "ref": "http://www.academia.edu/4708846/Looking_at_Partition_through_Tamas",
+          "reftype": "url",
+          "page": 6,
+          "pdf_regex": "\\.pdf(:?\\?.*)?$"
+        },
+        {
+          "ref": "http://shodh.inflibnet.ac.in:8080/jspui/bitstream/123456789/751/3/03_literatur",
           "reftype": "url",
           "page": 6,
           "pdf_regex": "\\.pdf(:?\\?.*)?$"
