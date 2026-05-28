@@ -32,14 +32,14 @@ A production-ready RAG (Retrieval-Augmented Generation) pipeline designed to pro
 │     │   • Knowledge graph construction                          │
 │     │   • Citation support (file_paths)                         │
 │     │                                                           │
-│     └─► Reranker: BAAI/bge-reranker-v2-m3                      │
+│     └─► Reranker: cohere/rerank-4-fast                          │
 │         • Improves retrieval quality (15-25%)                   │
 │                                                                 │
 │  3. BRAIN & INDEX                                               │
-│     ├─► text-embedding-005                                      │
-│     │   • 768 dimensions                                        │
-│     │   • Use task_type="RETRIEVAL_DOCUMENT" for docs           │
-│     │   • Use task_type="RETRIEVAL_QUERY" for queries           │
+│     ├─► qwen/qwen3-embedding-8b                                 │
+│     │   • 8B parameter embedding model                          │
+│     │   • High-quality semantic representations                 │
+│     │   • Optimized for retrieval tasks                         │
 │     │                                                           │
 │     └─► gemini-2.0-flash                                        │
 │         • 1M context window                                     │
@@ -180,12 +180,13 @@ result = rag.query(
 - Context: 32KB minimum (64KB recommended)
 - Avoid reasoning models during indexing
 
-#### Reranker: BAAI/bge-reranker-v2-m3
+#### Reranker: cohere/rerank-4-fast
 
 | Feature | Status |
 |---------|--------|
 | Retrieval quality improvement | ✅ 15-25% |
 | Integration with LightRAG | ✅ Supported |
+| Fast inference | ✅ Optimized for speed |
 
 **Why Add Reranker:**
 - Significantly improves retrieval quality
@@ -196,27 +197,32 @@ result = rag.query(
 
 ### 3. Brain & Index
 
-#### text-embedding-005 (Upgraded from 004)
+#### qwen/qwen3-embedding-8b
 
 | Feature | Status |
 |---------|--------|
-| Dimensions | 768 |
-| Task type optimization | ✅ Supported |
-| Retrieval performance | ✅ Better than 004 |
+| Parameters | 8B |
+| Performance | ✅ High-quality embeddings |
+| Retrieval optimization | ✅ Supported |
 
-**Task Types (CRITICAL):**
+**Why qwen3-embedding-8b:**
+- Large parameter count (8B) for better semantic understanding
+- Optimized for retrieval tasks
+- High-quality vector representations
+
+**Usage:**
 ```python
-# For document embeddings (stored in vector DB)
-task_type="RETRIEVAL_DOCUMENT"
+# For document embeddings
+def embed_document(text):
+    # Use qwen3-embedding-8b via your embedding service
+    embedding = embedding_service.embed(text)
+    return embedding
 
-# For query embeddings (user search input)
-task_type="RETRIEVAL_QUERY"
+# For query embeddings
+def embed_query(query):
+    embedding = embedding_service.embed(query)
+    return embedding
 ```
-
-**Why Upgrade:**
-- Better performance than text-embedding-004
-- Same dimensions (768)
-- Improved retrieval recall
 
 #### gemini-2.0-flash
 
@@ -245,9 +251,11 @@ PDFs
 Docling ──────► Content (text, tables, structure)
 PDFx ─────────► Metadata (authors, refs) ──► citation_map.json
  ↓
-LightRAG ─────► Knowledge Graph
+LightRAG ─────► Knowledge Graph (qwen3-embedding-8b for vectors)
  ↓
 Query ─────────► LLM (gemini-2.0-flash) ──► Answer + Citations
+                ↘
+                 cohere/rerank-4-fast (re-rank results)
 ```
 
 ---
@@ -320,9 +328,12 @@ def query_with_citations(query: str, rag, citation_map):
 pip install docling pdfx lightrag-hku
 
 # For reranker
-pip install sentence-transformers
+pip install cohere
 
-# For Gemini
+# For embeddings
+pip install transformers torch
+
+# For LLM
 pip install google-generativeai
 ```
 
@@ -357,25 +368,21 @@ rag = LightRAG(
 ### Embedding Configuration
 
 ```python
-import google.generativeai as genai
+# Using qwen/qwen3-embedding-8b
+from transformers import AutoTokenizer, AutoModel
+import torch
 
-# For document embeddings
-def embed_document(text):
-    result = genai.embed_content(
-        model="models/text-embedding-005",
-        content=text,
-        task_type="RETRIEVAL_DOCUMENT",
-    )
-    return result["embedding"]
+model_name = "qwen/qwen3-embedding-8b"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModel.from_pretrained(model_name)
 
-# For query embeddings
-def embed_query(query):
-    result = genai.embed_content(
-        model="models/text-embedding-005",
-        content=query,
-        task_type="RETRIEVAL_QUERY",
-    )
-    return result["embedding"]
+def embed_text(text):
+    inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True)
+    with torch.no_grad():
+        outputs = model(**inputs)
+    # Mean pooling
+    embedding = outputs.last_hidden_state.mean(dim=1)
+    return embedding.numpy()
 ```
 
 ---
@@ -387,9 +394,9 @@ def embed_query(query):
 | Docling | ✅ Complete | Primary parser |
 | PDFx | ✅ Complete | Metadata extraction |
 | LightRAG | ✅ Complete | KG construction |
-| Reranker | ✅ Complete | Quality improvement |
-| text-embedding-005 | ✅ Complete | Vector embeddings |
-| gemini-2.0-flash | ✅ Complete | LLM for extraction/query |
+| Reranker | ✅ Complete | cohere/rerank-4-fast |
+| Embeddings | ✅ Complete | qwen/qwen3-embedding-8b |
+| LLM | ✅ Complete | gemini-2.0-flash |
 | Citation mapping | ✅ Complete | PDFx + citation_map.json |
 
 **Architecture: 100% Resolved**
@@ -401,8 +408,9 @@ def embed_query(query):
 - [Docling GitHub](https://github.com/docling-project/docling)
 - [LightRAG GitHub](https://github.com/HKUDS/LightRAG)
 - [PDFx Documentation](https://github.com/metachris/pdfx)
-- [Google Gemini Embeddings](https://ai.google.dev/docs/gemini_api/embeddings)
-- [BAAI/bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3)
+- [Cohere Rerank](https://docs.cohere.com/docs/reranking)
+- [Qwen3 Embedding](https://huggingface.co/Qwen/Qwen3-Embedding-8B)
+- [Google Gemini](https://ai.google.dev/)
 
 ---
 
