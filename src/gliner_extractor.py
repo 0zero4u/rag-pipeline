@@ -39,7 +39,11 @@ def extract_entities_gliner(
     model = load_model()
     
     if entity_types is None:
-        entity_types = ["Person", "Organization", "Location", "Event", "Date", "Book", "Concept"]
+        entity_types = [
+            "Person", "Organization", "Location", "Event", "Date",
+            "Book", "Concept", "Theme", "Technique", "Symbol",
+            "ViolenceType", "HistoricalPeriod"
+        ]
     
     t0 = time.time()
     entities = model.predict_entities(text, entity_types, threshold=threshold)
