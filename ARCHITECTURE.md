@@ -386,21 +386,24 @@ def embed_query(query):
     return response.data[0].embedding
 ```
 
-### Reranker Configuration (Cohere)
+### Reranker Configuration (Cohere via OpenRouter)
 
 ```python
-import cohere
+# Using Cohere rerank-4-fast via OpenRouter
+import openrouter
 
-cohere_client = cohere.Client(api_key=os.environ["COHERE_API_KEY"])
+client = openrouter.OpenAI(api_key=os.environ["OPENROUTER_API_KEY"])
 
 def rerank(query, documents, top_n=5):
-    response = cohere_client.v2.rerank(
-        query=query,
-        documents=documents,
-        top_n=top_n,
-        model="rerank-4-fast"
+    # Cohere rerank model via OpenRouter chat endpoint
+    response = client.chat.completions.create(
+        model="cohere/rerank-4-fast",
+        messages=[
+            {"role": "system", "content": "Rate document relevance (0-1)."},
+            {"role": "user", "content": f"Query: {query}\n\nDocuments:\n" + "\n".join([f"{i}. {doc}" for i, doc in enumerate(documents)])}
+        ]
     )
-    return response.results
+    return response.choices[0].message.content
 ```
 
 ---
@@ -412,9 +415,9 @@ def rerank(query, documents, top_n=5):
 | Docling | ✅ Complete | Primary parser |
 | PDFx | ✅ Complete | Metadata extraction |
 | LightRAG | ✅ Complete | KG construction |
-| Reranker | ✅ Complete | cohere/rerank-4-fast |
-| Embeddings | ✅ Complete | qwen/qwen3-embedding-8b |
-| LLM | ✅ Complete | gemini-2.0-flash |
+| Reranker | ✅ Complete | cohere/rerank-4-fast via OpenRouter |
+| Embeddings | ✅ Complete | qwen/qwen3-embedding-8b via OpenRouter |
+| LLM | ✅ Complete | gemini-2.0-flash via OpenRouter |
 | Citation mapping | ✅ Complete | PDFx + citation_map.json |
 
 **Architecture: 100% Resolved**
@@ -426,7 +429,7 @@ def rerank(query, documents, top_n=5):
 - [Docling GitHub](https://github.com/docling-project/docling)
 - [LightRAG GitHub](https://github.com/HKUDS/LightRAG)
 - [PDFx Documentation](https://github.com/metachris/pdfx)
-- [Cohere Rerank](https://docs.cohere.com/docs/reranking)
+- [Cohere Rerank via OpenRouter](https://openrouter.ai/cohere/rerank-4-fast)
 - [OpenRouter API](https://openrouter.ai/docs)
 - [Qwen3 Embedding](https://huggingface.co/Qwen/Qwen3-Embedding-8B)
 

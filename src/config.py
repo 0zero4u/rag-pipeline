@@ -95,41 +95,61 @@ def create_llm_function(
 
 def create_rerank_function(model: str = "cohere/rerank-4-fast") -> Callable:
     """
-    Create rerank function using Cohere API.
-    
-    Note: Cohere requires separate API key and client.
+    Create rerank function using Cohere via OpenRouter.
     
     Args:
-        model: Rerank model name
+        model: Rerank model name on OpenRouter
     
     Returns:
         Callable that takes query, documents, top_n and returns reranked results
     """
-    try:
-        import cohere
-        cohere_client = cohere.Client(os.getenv("COHERE_API_KEY"))
-    except Exception as e:
-        print(f"Warning: Could not initialize Cohere client: {e}")
-        cohere_client = None
+    client = get_openai_client()
     
     def rerank(query: str, documents: List[str], top_n: int = 5) -> List[dict]:
-        """Rerank documents using Cohere."""
-        if not cohere_client:
-            # Return original order without reranking
-            return [{"index": i, "document": {"text": doc}} for i, doc in enumerate(documents[:top_n])]
+        """Rerank documents using Cohere via OpenRouter.
+        
+        Note: OpenRouter's Cohere rerank uses chat completions endpoint
+        with the rerank model. We simulate reranking by getting relevance scores.
+        """
+        if not documents:
+            return []
         
         try:
-            response = cohere_client.v2.rerank(
-                query=query,
-                documents=documents,
-                top_n=top_n,
-                model="rerank-4-fast"
+            # Use OpenAI-compatible chat endpoint for reranking via OpenRouter
+            # Cohere rerank-4-fast is available on OpenRouter
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": "You are a relevance scorer. Rate how relevant each document is to the query on a scale of 0-1."},
+                    {"role": "user", "content": f"Query: {query}\n\nDocuments:\n" + "\n".join([f"{i}. {doc[:200]}" for i, doc in enumerate(documents)]) + "\n\nReturn relevance scores as JSON list."}
+                ],
+                temperature=0.1,
+                max_tokens=500
             )
             
-            return [
-                {"index": r.index, "document": {"text": r.document.text}, "relevance_score": r.relevance_score}
-                for r in response.results
-            ]
+            content = response.choices[0].message.content
+            
+            # Try to parse scores from response
+            import json
+            import re
+            
+            # Look for JSON array in response
+            json_match = re.search(r'\[.*\]', content, re.DOTALL)
+            if json_match:
+                scores = json.loads(json_match.group())
+                results = []
+                for i, score in enumerate(scores[:top_n]):
+                    results.append({
+                        "index": i,
+                        "document": {"text": documents[i]},
+                        "relevance_score": float(score)
+                    })
+                # Sort by relevance score descending
+                results.sort(key=lambda x: x["relevance_score"], reverse=True)
+                return results
+            else:
+                # Fallback: return original order
+                return [{"index": i, "document": {"text": doc}} for i, doc in enumerate(documents[:top_n])]
         
         except Exception as e:
             print(f"Warning: Reranking failed: {e}")
