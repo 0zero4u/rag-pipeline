@@ -743,6 +743,16 @@ python3 check_citations.py /tmp/final_draft.md
 
 ---
 
+## Related Documentation
+
+| Document | Purpose |
+|----------|---------|
+| `RIPPLE_DEPENDENCIES.md` | Track changes that ripple across multiple files |
+| `chapter_plan.md` | Dissertation structure for Train to Pakistan study |
+| `PLAN.md` | Implementation plan for LightRAGWriterAgent |
+
+---
+
 ## Last Updated
 
-2026-05-28 (3-agent citation pipeline: LightRAGWriter → Humanize → CitationAdder)
+2026-05-28 (top_k=150, enhanced HumanizeAgent, ripple dependencies doc)
