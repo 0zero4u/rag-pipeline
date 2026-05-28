@@ -26,20 +26,24 @@ def format_mla_entry(entry: CitationEntry) -> str:
     year = entry.year or "n.d."
     title = entry.title or "Untitled"
     
+    # Convert title to title case (first letter of each major word capitalized)
+    title = title.title()
+    
     if entry.journal:
-        # Journal article format
+        # Journal article format: Author. "Title." *Journal*, vol. #, Year, pp. #-#.
         volume = f", vol. {entry.volume}" if entry.volume else ""
         issue = f", no. {entry.issue}" if entry.issue else ""
         pages = f", pp. {entry.pages}" if entry.pages else ""
-        return f'{authors}. "{title}." *{entry.journal}*{volume}{issue}, {year}{pages}.'
+        journal = entry.journal.title()  # Italicize journal name
+        return f'{authors}. "{title}." *{journal}*{volume}{issue}, {year}{pages}.'
     elif entry.publisher:
-        # Book format
+        # Book format: Author. *Title*. Publisher, Year.
         return f'{authors}. *{title}*. {entry.publisher}, {year}.'
     elif entry.doi:
-        # DOI-only format
+        # DOI-only format: Author. "Title." Year. DOI.
         return f'{authors}. "{title}." {year}. {entry.doi}.'
     else:
-        # Fallback format
+        # Fallback format: Author. "Title." Year.
         return f'{authors}. "{title}." {year}.'
 
 
