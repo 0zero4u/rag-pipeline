@@ -197,31 +197,32 @@ result = rag.query(
 
 ### 3. Brain & Index
 
-#### qwen/qwen3-embedding-8b
+#### qwen/qwen3-embedding-8b (via OpenRouter)
 
 | Feature | Status |
 |---------|--------|
 | Parameters | 8B |
-| Performance | ✅ High-quality embeddings |
-| Retrieval optimization | ✅ Supported |
+| Access via | OpenRouter API |
+| API Key | OPENROUTER_API_KEY |
 
 **Why qwen3-embedding-8b:**
 - Large parameter count (8B) for better semantic understanding
 - Optimized for retrieval tasks
 - High-quality vector representations
 
-**Usage:**
+**Configuration:**
 ```python
-# For document embeddings
-def embed_document(text):
-    # Use qwen3-embedding-8b via your embedding service
-    embedding = embedding_service.embed(text)
-    return embedding
+# Using OpenRouter API for embeddings
+import openrouter
 
-# For query embeddings
-def embed_query(query):
-    embedding = embedding_service.embed(query)
-    return embedding
+client = openrouter.OpenAI(api_key=os.environ["OPENROUTER_API_KEY"])
+
+def embed_text(text):
+    response = client.embeddings.create(
+        model="qwen/qwen3-embedding-8b",
+        input=text
+    )
+    return response.data[0].embedding
 ```
 
 #### gemini-2.0-flash
@@ -327,14 +328,11 @@ def query_with_citations(query: str, rag, citation_map):
 # Core dependencies
 pip install docling pdfx lightrag-hku
 
-# For reranker
-pip install cohere
+# API Clients
+pip install openrouter cohere
 
-# For embeddings
-pip install transformers torch
-
-# For LLM
-pip install google-generativeai
+# Utilities
+pip install python-dotenv tqdm
 ```
 
 ---
@@ -365,24 +363,44 @@ rag = LightRAG(
 )
 ```
 
-### Embedding Configuration
+### Embedding Configuration (OpenRouter)
 
 ```python
-# Using qwen/qwen3-embedding-8b
-from transformers import AutoTokenizer, AutoModel
-import torch
+import os
+import openrouter
 
-model_name = "qwen/qwen3-embedding-8b"
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModel.from_pretrained(model_name)
+client = openrouter.OpenAI(api_key=os.environ["OPENROUTER_API_KEY"])
 
 def embed_text(text):
-    inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True)
-    with torch.no_grad():
-        outputs = model(**inputs)
-    # Mean pooling
-    embedding = outputs.last_hidden_state.mean(dim=1)
-    return embedding.numpy()
+    response = client.embeddings.create(
+        model="qwen/qwen3-embedding-8b",
+        input=text
+    )
+    return response.data[0].embedding
+
+def embed_query(query):
+    response = client.embeddings.create(
+        model="qwen/qwen3-embedding-8b",
+        input=query
+    )
+    return response.data[0].embedding
+```
+
+### Reranker Configuration (Cohere)
+
+```python
+import cohere
+
+cohere_client = cohere.Client(api_key=os.environ["COHERE_API_KEY"])
+
+def rerank(query, documents, top_n=5):
+    response = cohere_client.v2.rerank(
+        query=query,
+        documents=documents,
+        top_n=top_n,
+        model="rerank-4-fast"
+    )
+    return response.results
 ```
 
 ---
@@ -409,8 +427,8 @@ def embed_text(text):
 - [LightRAG GitHub](https://github.com/HKUDS/LightRAG)
 - [PDFx Documentation](https://github.com/metachris/pdfx)
 - [Cohere Rerank](https://docs.cohere.com/docs/reranking)
+- [OpenRouter API](https://openrouter.ai/docs)
 - [Qwen3 Embedding](https://huggingface.co/Qwen/Qwen3-Embedding-8B)
-- [Google Gemini](https://ai.google.dev/)
 
 ---
 

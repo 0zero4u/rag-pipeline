@@ -1,0 +1,14 @@
+# PDF Parsing
+docling>=2.0.0
+pdfx>=0.1.0
+
+# RAG Engine
+lightrag-hku>=1.0.0
+
+# API Clients
+openai>=1.0.0  # OpenAI SDK works with OpenRouter
+cohere>=4.0.0
+
+# Utilities
+python-dotenv>=1.0.0
+tqdm>=4.65.0
