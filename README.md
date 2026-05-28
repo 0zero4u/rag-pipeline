@@ -56,6 +56,8 @@ Only **OpenRouter** is needed (single key for everything):
 
 ### 4. Query with Citations
 
+**⚠️ Query Requirements:** Queries must have semantic overlap with indexed content. Vector similarity (cosine) requires keywords to match. Abstract queries like "What is this paper about?" won't work - use specific terms from the content (e.g., "Train to Pakistan Partition", "Khushwant Singh themes").
+
 ```python
 import asyncio
 from src.config import (
@@ -69,11 +71,15 @@ async def main():
     rag = config["rag"]
     llm_func = config["llm_func"]
 
+    # Use content-relevant queries (semantic overlap required)
     result = await query_with_citations(
         rag, llm_func,
-        "What are the main themes?",
+        "Train to Pakistan Partition Khushwant Singh",  # ✅ specific terms
         citation_map_path="citation_map.json"
     )
+
+    # ❌ "What is this paper about?" - NO semantic overlap with chunks
+    # ❌ "Main themes?" - too abstract for cosine similarity
 
     print(result["answer"])
     for cit in result["citations"]:
@@ -83,13 +89,11 @@ async def main():
 
 **Output:**
 ```
-The main themes of the papers include...
+Train to Pakistan (1956) is a novel by Khushwant Singh...
 
 CITATIONS:
-  [1] Dr Urmila Devi (2021)
-      Social and Political Aspects by Khushwant Singh
-  [2] Naved Alam et al. (None)
-      Exploring the Literary Contributions of Kushwant Singh...
+  [1] study_material_1770263377 (None)
+      Partition and Communal Violence in Train to Pakistan
 ```
 
 ## Project Structure
@@ -137,4 +141,4 @@ Query → LightRAG → Chunks with reference_id
 
 ## Last Updated
 
-2026-05-28
+2026-05-28 - Added query requirements note (semantic overlap needed for vector similarity)
