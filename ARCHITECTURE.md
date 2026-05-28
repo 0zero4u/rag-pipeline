@@ -492,6 +492,32 @@ top_k=5 might return 9 chunks:
 
 **Recommendation**: With 100 PDFs, use `top_k=10-20` for better coverage. LLM has 1M context, cost is minimal for text chunks.
 
+### 10. Cache Freshness Rules
+
+**Current indexed state** (as of 2026-05-28):
+| Location | Count | PDFs |
+|---------|-------|------|
+| `working_dir/` | 2 | 7th + 8th smallest |
+| `data/processed/` | 2 | Same 2 PDFs |
+
+**When is cache fresh vs stale?**
+
+| Scenario | Cache Fresh? | Action Required |
+|----------|--------------|----------------|
+| Fresh start with new PDFs only | ✅ Fresh | Clear working_dir + data/processed first |
+| Adding PDFs to existing index | ⚠️ Mixed | Clear working_dir, keep data/processed |
+| Same PDF re-indexed | ❌ Stale | LightRAG duplicate detection prevents re-index |
+| New PDF with `--reindex` | ✅ Fresh | main.py saves fresh cache |
+
+**When to use --reindex:**
+- Adding new PDFs to existing index
+- Ensures fresh parsing
+
+**When to clear manually:**
+```bash
+rm -rf working_dir/* data/processed/*
+```
+
 ---
 
 ### 3. RAG Engine
