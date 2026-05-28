@@ -2,28 +2,37 @@
   "citations": {
     "Portrayal of Violence and Horror in Train to Pakistan.pdf": {
       "filename": "Portrayal of Violence and Horror in Train to Pakistan.pdf",
-      "title": "Portrayal of Violence and Horror in Train to Pakistan.pdf",
-      "authors": [],
-      "year": null,
+      "title": "Portrayal of Violence and Horror in Train to Pakistan",
+      "authors": ["Anonymous"],
+      "year": "n.d.",
       "doi": "",
       "reference_keys": []
     },
     "Partition_Violence_Displacement_and_Trauma_in_Khus.pdf": {
       "filename": "Partition_Violence_Displacement_and_Trauma_in_Khus.pdf",
-      "title": "Partition_Violence_Displacement_and_Trauma_in_Khus.pdf",
-      "authors": [],
-      "year": null,
+      "title": "Partition, Violence, Displacement and Trauma in Khushwant Singh's Train to Pakistan",
+      "authors": ["Chetra Bahadur Darlami Magar"],
+      "year": "2024",
       "doi": "",
       "reference_keys": [
-        "Unknown-n.d.",
-        "Unknown-n.d.",
-        "Unknown-n.d.",
-        "Unknown-n.d.",
-        "Unknown-n.d.",
         "Unknown-n.d."
       ]
     }
   },
-  "author_index": {},
-  "year_index": {}
+  "author_index": {
+    "Anonymous": [
+      "Portrayal of Violence and Horror in Train to Pakistan.pdf"
+    ],
+    "Chetra Bahadur Darlami Magar": [
+      "Partition_Violence_Displacement_and_Trauma_in_Khus.pdf"
+    ]
+  },
+  "year_index": {
+    "2024": [
+      "Partition_Violence_Displacement_and_Trauma_in_Khus.pdf"
+    ],
+    "n.d.": [
+      "Portrayal of Violence and Horror in Train to Pakistan.pdf"
+    ]
+  }
 }
