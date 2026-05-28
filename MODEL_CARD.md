@@ -66,15 +66,26 @@ OpenRouter API
 
 ## Rate Limits
 
-| Model | Provider | Limit | Reset |
-|-------|----------|-------|-------|
-| `deepseek/deepseek-v4-flash` | OpenRouter | Varies | Check headers |
-| `google/gemini-3.5-flash` | OpenRouter | Varies | Check headers |
+### OpenRouter (Our Provider)
 
-**If rate limited**:
+| Model | Limit | Notes |
+|-------|-------|-------|
+| `deepseek/deepseek-v4-flash` | Concurrent requests | Check X-RateLimit headers |
+| `google/gemini-3.5-flash` | Concurrent requests | Rate limited (avoid) |
+
+**If rate limited (429 error)**:
 1. Wait for reset (check `X-RateLimit-Reset` header)
-2. Switch model via `--llm-model` flag
-3. Reduce concurrent requests in `config.py`
+2. Reduce concurrent workers in `config.py`
+3. Add delay between requests (currently 0.5s)
+
+### DeepSeek Direct API (Reference)
+
+| Model | Concurrency | Source |
+|-------|-------------|--------|
+| `deepseek-v4-pro` | 500 concurrent | [DeepSeek Docs](https://api-docs.deepseek.com/quick_start/rate_limit) |
+| `deepseek-v4-flash` | 2500 concurrent | [DeepSeek Docs](https://api-docs.deepseek.com/quick_start/rate_limit) |
+
+**Note**: We use OpenRouter, not DeepSeek directly. OpenRouter aggregates multiple providers.
 
 ---
 

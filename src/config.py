@@ -79,13 +79,23 @@ def create_llm_func(
     """
     client = get_openai_client()
 
+    import asyncio
+    import time
+    last_call_time = [0.0]  # Mutable container for closure
+
     async def generate(
         prompt: str,
         system_prompt: Optional[str] = None,
         history_messages: list = [],
         **kwargs
     ) -> str:
-        """Generate response using OpenRouter."""
+        """Generate response using OpenRouter with rate limiting."""
+        # Rate limit: min 0.5s between calls
+        elapsed = time.time() - last_call_time[0]
+        if elapsed < 0.5:
+            await asyncio.sleep(0.5 - elapsed)
+        last_call_time[0] = time.time()
+
         messages = []
 
         if system_prompt:
