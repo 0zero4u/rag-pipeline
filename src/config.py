@@ -90,10 +90,10 @@ def create_llm_func(
         **kwargs
     ) -> str:
         """Generate response using OpenRouter with rate limiting."""
-        # Rate limit: min 0.5s between calls
+        # Rate limit: min 0.3s between calls
         elapsed = time.time() - last_call_time[0]
-        if elapsed < 0.5:
-            await asyncio.sleep(0.5 - elapsed)
+        if elapsed < 0.3:
+            await asyncio.sleep(0.3 - elapsed)
         last_call_time[0] = time.time()
 
         messages = []
