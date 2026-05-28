@@ -333,7 +333,7 @@ Output: JSON report of valid/invalid citations with correction suggestions.
 
 ```
 1. INDEXING
-   python main.py --mode index --pdf-dir ./data/raw --llm-model deepseek/deepseek-v4-flash
+   python main.py --mode index --pdf-dir ./data/raw --llm-model deepseek/deepseek-v4-flash --embedding-model qwen/qwen3-embedding-8b
    │
    ├─► Parse PDFs (pymupdf4llm, OCR disabled)
    │     └─► Extract content + metadata via LLM (title, authors, year)
@@ -342,8 +342,8 @@ Output: JSON report of valid/invalid citations with correction suggestions.
    │     └─► 1 LLM call per PDF for metadata extraction
    │
    └─► Index to LightRAG
-         └─► Embed with Perplexity pplx-embed-v1-0.6b
-         └─► Entity extraction via GLiNER (0.2s/chunk, local CPU)
+         └─► Embed with qwen/qwen3-embedding-8b (4096-dim)
+         └─► Entity extraction via GLiNER (12 academic labels, 0.2s/chunk)
 
 2. QUERYING (via Agent)
    python query_writer.py "topic" 150
@@ -486,6 +486,14 @@ rm -rf /home/arshhtripathi/rag-pipeline/src/working_dir/*
 **Status**: ✅ Active (2026-05-28)
 
 **How it works**: GLiNER extracts entities locally (0.2s/chunk) instead of LLM (8s/chunk).
+
+**Labels**: 12 academic labels
+- Person, Organization, Location, Event, Date, Book, Concept
+- **Theme** (humanism, violence, identity)
+- **Technique** (mise-en-scène, montage)
+- **Symbol** (train, bridge, water)
+- **ViolenceType** (massacre, displacement)
+- **HistoricalPeriod** (Colonial era, Post-independence)
 
 **If extraction fails**: Check `[GLiNER]` logs for model loading or extraction issues.
 

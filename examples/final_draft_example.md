@@ -1,0 +1,9 @@
+The partition of the Indian subcontinent in 1947 unleashed communal violence whose effects lingered on South Asian society (Gupta, Priyanka. Study of Partition in Train to Pakistan (1956) and a Bend in the Ganges (1965). 2014.). Scholarly accounts of partition have documented the extensive trauma experienced by communities, revealing how violence reshaped social bonds (Gupta, Priyanka. Study of Partition in Train to Pakistan (1956) and a Bend in the Ganges (1965). 2014.).
+
+In Train to Pakistan, Khushwant Singh represents the everyday experience of ordinary people caught in partition violence. Jugga, a Sikh figure with a reputation for trouble, falls in love with Nooran, a Muslim girl, demonstrating how intimate bonds persisted across religious lines even as sectarian conflict fractured communities (Gupta, Priyanka. Study of Partition in Train to Pakistan (1956) and a Bend in the Ganges (1965). 2014.).
+
+Women's experiences during partition, though underdocumented in official records, evidence both their resilience and their vulnerability. Sundari in A Bend in the Ganges appears as a figure of considerable fortitude, embodying the complex position of women during this upheaval (Gupta, Priyanka. Study of Partition in Train to Pakistan (1956) and a Bend in the Ganges (1965). 2014.).
+
+Singh's novel engages with the dissonance between historical narrative and lived memory, proposing a fictional reconciliation of the paradox between national liberation and the loss of domestic stability (Gupta, Priyanka. Study of Partition in Train to Pakistan (1956) and a Bend in the Ganges (1965). 2014.).
+
+(End of file - total 12 lines)
