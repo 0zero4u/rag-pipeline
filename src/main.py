@@ -77,11 +77,11 @@ async def run_pipeline(
         with open(all_parsed_path, 'r', encoding='utf-8') as f:
             all_parsed = json.load(f)
     else:
-        # Use freshly parsed PDFs
-        all_parsed = [p if isinstance(p, dict) else p.__dict__ for p in parsed_pdfs]
-        # Save fresh cache
+        from dataclasses import asdict
+        from parser import PDFEncoder
+        all_parsed = [p if isinstance(p, dict) else asdict(p) for p in parsed_pdfs]
         with open(all_parsed_path, 'w', encoding='utf-8') as f:
-            json.dump(all_parsed, f, indent=2, ensure_ascii=False)
+            json.dump(all_parsed, f, indent=2, ensure_ascii=False, cls=PDFEncoder)
     
     # Insert documents with file paths
     documents = []
