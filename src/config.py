@@ -146,6 +146,14 @@ async def initialize_lightrag(
 
     embedding_func = create_embedding_func(embedding_model)
     llm_func = create_llm_func(llm_model)
+    
+    # Wrap LLM with GLiNER for fast entity extraction
+    try:
+        from gliner_extractor import create_gliner_llm_func
+        llm_func = create_gliner_llm_func(llm_func)
+        print("GLiNER enabled for entity extraction")
+    except ImportError:
+        print("GLiNER not available, using LLM for entity extraction")
 
     rag = LightRAG(
         working_dir=str(working_dir),
