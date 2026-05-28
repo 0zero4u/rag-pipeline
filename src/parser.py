@@ -7,11 +7,20 @@ Produces structured output for LightRAG ingestion.
 
 import json
 import os
+import re
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 from dataclasses import dataclass, asdict
-
 from tqdm import tqdm
+
+
+class PDFEncoder(json.JSONEncoder):
+    def default(self, obj: Any) -> Any:
+        if isinstance(obj, re.Pattern):
+            return obj.pattern
+        if hasattr(obj, '__dict__'):
+            return obj.__dict__
+        return super().default(obj)
 
 # pymupdf4llm for content extraction (tables, formulas, OCR)
 try:
@@ -27,7 +36,7 @@ try:
     from pdfx import PDFx as PDFxExtractor
     PDFX_AVAILABLE = True
 except ImportError:
-    print("Warning: pdfx not installed. Metadata extraction will be skipped.")
+    print("Warning: pdfx not installed. References extraction will be skipped.")
     PDFX_AVAILABLE = False
 
 
@@ -44,39 +53,58 @@ class PDFMetadata:
     confidence: str  # 'high', 'medium', 'low'
 
 
-def extract_metadata_with_llm(first_page_text: str, llm_func: callable) -> dict:
+def extract_metadata_with_llm(start_text: str, end_text: str, llm_func: callable) -> dict:
     """
-    Extract metadata via LLM from first-page text.
-    NOTE: This is a sync wrapper for use in async batch processing.
+    Extract metadata via LLM from start and end of paper.
+    Start: title, authors, year, abstract
+    End: references, conclusion summary
 
     Args:
-        first_page_text: First ~2000 chars of first page
+        start_text: First ~4000 chars (title, authors, abstract)
+        end_text: Last ~4000 chars (conclusion, references)
         llm_func: LLM function from config.py
 
     Returns:
-        dict with title, authors, year, abstract
+        dict with title, authors, year, abstract, references
     """
     import json, re
     import asyncio
 
-    prompt = f"""You are a research librarian. Extract metadata from this academic paper's first page.
+    prompt = f"""You are a research librarian. Extract metadata from this academic paper.
 Return ONLY valid JSON with these exact keys:
 - "title": paper title (string)
 - "authors": list of author names (list of strings)
 - "year": publication year (string or null)
 - "abstract": first paragraph/sentence (string or null)
+- "references": list of reference strings from the references section
 
-Paper text:\n\n{first_page_text[:2000]}"""
+=== START OF PAPER ===
+{start_text[:4000]}
+=== END OF PAPER ===
+{end_text[-4000:]}
+
+Return JSON with all fields above. If year/abstract not found, use null. If no references, use empty list."""
 
     try:
-        response = asyncio.get_event_loop().run_until_complete(llm_func(prompt))
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        
+        if loop and loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, llm_func(prompt))
+                response = future.result()
+        else:
+            response = asyncio.run(llm_func(prompt))
         match = re.search(r'\{.*\}', response, re.DOTALL)
         if match:
             return json.loads(match.group())
-        return {"title": None, "authors": [], "year": None, "abstract": None}
+        return {"title": None, "authors": [], "year": None, "abstract": None, "references": []}
     except Exception as e:
         print(f"Warning: LLM metadata extraction failed: {e}")
-        return {"title": None, "authors": [], "year": None, "abstract": None}
+        return {"title": None, "authors": [], "year": None, "abstract": None, "references": []}
 
 
 @dataclass
@@ -86,6 +114,8 @@ class ParsedPDF:
     content: str
     metadata: Optional[PDFMetadata]
     first_page_snippet: str = ""
+    start_snippet: str = ""
+    end_snippet: str = ""
     page_count: int = 0
     has_tables: bool = False
     has_formulas: bool = False
@@ -145,7 +175,16 @@ def extract_references_with_pdfx(pdf_path: str) -> list[dict]:
     try:
         pdfx = PDFxExtractor(pdf_path)
         references = pdfx.get_references()
-        return references if references else []
+        if isinstance(references, set):
+            references = list(references)
+        # Convert Reference objects to dicts
+        serialized = []
+        for ref in (references or []):
+            if hasattr(ref, '__dict__'):
+                serialized.append(ref.__dict__)
+            else:
+                serialized.append(str(ref))
+        return serialized
     except Exception as e:
         print(f"Warning: PDFx reference extraction failed for {pdf_path}: {e}")
         return []
@@ -168,15 +207,14 @@ def parse_single_pdf(pdf_path: str) -> ParsedPDF:
     # Get references via PDFx
     references = extract_references_with_pdfx(pdf_path)
 
-    # First page text for later metadata extraction
-    first_page_snippet = ""
-    if content:
-        parts = content.split('\n\n')
-        for part in parts:
-            first_page_snippet += part + "\n\n"
-            if len(first_page_snippet) >= 1500:
-                break
-    first_page_snippet = first_page_snippet[:2000]
+    # First 4000 chars (title, authors, abstract)
+    start_snippet = content[:4000] if content else ""
+    
+    # Last 4000 chars (conclusion, references)
+    end_snippet = content[-4000:] if content else ""
+    
+    # Also keep short first_page for backwards compatibility
+    first_page_snippet = content[:2000] if content else ""
 
     metadata = PDFMetadata(
         title=filename,
@@ -194,6 +232,8 @@ def parse_single_pdf(pdf_path: str) -> ParsedPDF:
         content=content,
         metadata=metadata,
         first_page_snippet=first_page_snippet,
+        start_snippet=start_snippet,
+        end_snippet=end_snippet,
         page_count=result['page_count'],
         has_tables=result['has_tables'],
         has_formulas=result['has_formulas']
@@ -232,7 +272,7 @@ def parse_pdfs(pdf_dir: str, output_dir: str, recursive: bool = True) -> list[Pa
 
             output_file = output_dir / f"{Path(pdf_path).stem}.json"
             with open(output_file, 'w', encoding='utf-8') as f:
-                json.dump(asdict(parsed), f, indent=2, ensure_ascii=False)
+                json.dump(asdict(parsed), f, indent=2, ensure_ascii=False, cls=PDFEncoder)
 
         except Exception as e:
             print(f"Error processing {pdf_path}: {e}")
@@ -240,7 +280,7 @@ def parse_pdfs(pdf_dir: str, output_dir: str, recursive: bool = True) -> list[Pa
 
     combined_output = output_dir / "all_parsed.json"
     with open(combined_output, 'w', encoding='utf-8') as f:
-        json.dump([asdict(p) for p in parsed_pdfs], f, indent=2, ensure_ascii=False)
+        json.dump([asdict(p) for p in parsed_pdfs], f, indent=2, ensure_ascii=False, cls=PDFEncoder)
 
     print(f"Saved results to {output_dir}")
     return parsed_pdfs

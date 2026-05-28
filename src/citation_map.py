@@ -74,26 +74,39 @@ def build_citation_map( parsed_pdfs: list[dict], output_path: Optional[str] = No
     year_index = defaultdict(list)
     
     for parsed in parsed_pdfs:
-        filename = parsed.get('filename', '')
-        metadata = parsed.get('metadata')
+        # Support both dict and object formats
+        if isinstance(parsed, dict):
+            filename = parsed.get('filename', '')
+            metadata = parsed.get('metadata')
+        else:
+            filename = getattr(parsed, 'filename', '')
+            metadata = getattr(parsed, 'metadata', None)
         
         # Skip if no metadata
         if not metadata:
             continue
         
+        # Handle metadata as dict or object
+        if hasattr(metadata, 'get'):
+            meta_dict = metadata
+        elif hasattr(metadata, '__dict__'):
+            meta_dict = metadata.__dict__
+        else:
+            continue
+        
         # Build reference keys
         reference_keys = []
-        for ref in metadata.get('references', []):
+        for ref in meta_dict.get('references', []):
             key = build_reference_key(ref)
             reference_keys.append(key)
         
         # Create citation entry
         entry = CitationEntry(
             filename=filename,
-            title=metadata.get('title', 'Unknown'),
-            authors=metadata.get('authors', []) or [],
-            year=metadata.get('year', 'n.d.'),
-            doi=metadata.get('doi', ''),
+            title=meta_dict.get('title', 'Unknown'),
+            authors=meta_dict.get('authors', []) or [],
+            year=meta_dict.get('year', 'n.d.'),
+            doi=meta_dict.get('doi', ''),
             reference_keys=reference_keys
         )
         

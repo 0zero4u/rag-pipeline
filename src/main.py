@@ -17,29 +17,20 @@ from tqdm import tqdm
 # Local modules
 from parser import parse_pdfs, ParsedPDF
 from citation_map import build_citation_map, load_citation_map, enrich_results
-from config import initialize_lightrag, create_rerank_function
+from config import initialize_lightrag
+import asyncio
 
 
-def run_pipeline(
+async def run_pipeline(
     pdf_dir: str,
     output_dir: str,
     working_dir: str = "./working_dir",
     embedding_model: str = "qwen/qwen3-embedding-8b",
-    llm_model: str = "google/gemini-2.0-flash",
-    extract_metadata: bool = True,
+    llm_model: str = "deepseek/deepseek-v4-flash",
     reindex: bool = False
 ):
     """
     Run the complete RAG pipeline.
-    
-    Args:
-        pdf_dir: Directory containing PDFs
-        output_dir: Directory for processed output
-        working_dir: Directory for LightRAG index
-        embedding_model: OpenRouter embedding model
-        llm_model: OpenRouter LLM model
-        extract_metadata: Whether to extract PDF metadata
-        reindex: Whether to reindex existing parsed PDFs
     """
     pdf_dir = Path(pdf_dir)
     output_dir = Path(output_dir)
@@ -50,14 +41,13 @@ def run_pipeline(
     print("=" * 60)
     
     # Step 1: Parse PDFs
-    print("\n[1/4] Parsing PDFs with Docling + PDFx...")
+    print("\n[1/4] Parsing PDFs with pymupdf4llm + PDFx...")
     parsed_pdfs = parse_pdfs(
         pdf_dir=str(pdf_dir),
-        output_dir=str(output_dir),
-        extract_metadata=extract_metadata
+        output_dir=str(output_dir)
     )
     print(f"Parsed {len(parsed_pdfs)} PDFs")
-    
+
     # Step 2: Build citation map
     print("\n[2/4] Building citation map...")
     citation_map_path = output_dir / "citation_map.json"
@@ -69,7 +59,7 @@ def run_pipeline(
     
     # Step 3: Initialize LightRAG
     print("\n[3/4] Initializing LightRAG...")
-    config = initialize_lightrag(
+    config = await initialize_lightrag(
         working_dir=str(working_dir),
         embedding_model=embedding_model,
         llm_model=llm_model
@@ -80,14 +70,18 @@ def run_pipeline(
     
     # Step 4: Index documents
     print("\n[4/4] Indexing documents into LightRAG...")
-    
-    # Load parsed results
+
+    # Load parsed results - use freshly parsed PDFs, not stale cache
     all_parsed_path = output_dir / "all_parsed.json"
-    if all_parsed_path.exists():
+    if all_parsed_path.exists() and not reindex:
         with open(all_parsed_path, 'r', encoding='utf-8') as f:
             all_parsed = json.load(f)
     else:
+        # Use freshly parsed PDFs
         all_parsed = [p if isinstance(p, dict) else p.__dict__ for p in parsed_pdfs]
+        # Save fresh cache
+        with open(all_parsed_path, 'w', encoding='utf-8') as f:
+            json.dump(all_parsed, f, indent=2, ensure_ascii=False)
     
     # Insert documents with file paths
     documents = []
@@ -103,7 +97,7 @@ def run_pipeline(
     
     if documents:
         print(f"Inserting {len(documents)} documents...")
-        rag.insert(documents, file_paths=file_paths)
+        await rag.ainsert(documents, file_paths=file_paths)
         print("Indexing complete!")
     else:
         print("No documents to index")
@@ -209,7 +203,7 @@ def interactive_query(rag, citation_map):
             print(f"Error: {e}")
 
 
-def main():
+async def main():
     parser = argparse.ArgumentParser(description="RAG Pipeline for Academic PDFs")
     
     # Mode selection
@@ -227,14 +221,12 @@ def main():
                         help='Path to existing citation map')
     
     # Models
-    parser.add_argument('--embedding-model', default='qwen/qwen3-embedding-8b',
+    parser.add_argument('--embedding-model', default='perplexity/pplx-embed-v1-0.6b',
                         help='OpenRouter embedding model')
-    parser.add_argument('--llm-model', default='google/gemini-2.0-flash',
+    parser.add_argument('--llm-model', default='google/gemini-3.5-flash',
                         help='OpenRouter LLM model')
     
     # Options
-    parser.add_argument('--no-metadata', action='store_true',
-                        help='Skip metadata extraction')
     parser.add_argument('--reindex', action='store_true',
                         help='Reindex existing parsed PDFs')
     parser.add_argument('--interactive', action='store_true',
@@ -243,25 +235,21 @@ def main():
     args = parser.parse_args()
     
     if args.mode == 'parse':
-        # Just parse PDFs
-        parse_pdfs(args.pdf_dir, args.output_dir, extract_metadata=not args.no_metadata)
+        parse_pdfs(args.pdf_dir, args.output_dir)
     
     elif args.mode == 'index':
-        # Parse first, then index
-        run_pipeline(
+        await run_pipeline(
             pdf_dir=args.pdf_dir,
             output_dir=args.output_dir,
             working_dir=args.working_dir,
             embedding_model=args.embedding_model,
             llm_model=args.llm_model,
-            extract_metadata=not args.no_metadata,
             reindex=args.reindex
         )
     
     elif args.mode == 'query':
-        # Load existing index and query
         citation_map = load_citation_map(args.citation_map or f"{args.output_dir}/citation_map.json")
-        config = initialize_lightrag(working_dir=args.working_dir)
+        config = await initialize_lightrag(working_dir=args.working_dir)
         rag = config['rag']
         
         if args.interactive:
@@ -270,14 +258,12 @@ def main():
             print("Use --interactive for query mode")
     
     else:  # 'all'
-        # Run full pipeline
-        result = run_pipeline(
+        result = await run_pipeline(
             pdf_dir=args.pdf_dir,
             output_dir=args.output_dir,
             working_dir=args.working_dir,
             embedding_model=args.embedding_model,
             llm_model=args.llm_model,
-            extract_metadata=not args.no_metadata,
             reindex=args.reindex
         )
         
@@ -290,4 +276,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

@@ -55,14 +55,14 @@ def create_embedding_func(model: str = "qwen/qwen3-embedding-8b") -> dict:
         return np.array([item.embedding for item in response.data])
 
     return EmbeddingFunc(
-        embedding_dim=4096,
+        embedding_dim=1024,
         max_token_size=8192,
         func=embed_func,
     )
 
 
 def create_llm_func(
-    model: str = "google/gemini-3.5-flash",
+    model: str = "deepseek/deepseek-v4-flash",
     temperature: float = 0.0,
     max_tokens: int = 2048
 ) -> Callable:
@@ -108,8 +108,8 @@ def create_llm_func(
 
 async def initialize_lightrag(
     working_dir: str = "./working_dir",
-    embedding_model: str = "qwen/qwen3-embedding-8b",
-    llm_model: str = "google/gemini-3.5-flash",
+    embedding_model: str = "perplexity/pplx-embed-v1-0.6b",
+    llm_model: str = "deepseek/deepseek-v4-flash",
     chunk_token_size: int = 2000,
     language: str = "English"
 ) -> dict:
@@ -141,6 +141,7 @@ async def initialize_lightrag(
         kv_storage="JsonKVStorage",
         vector_storage="NanoVectorDBStorage",
         graph_storage="NetworkXStorage",
+        enable_llm_cache_for_entity_extract=True,
     )
 
     await rag.initialize_storages()
@@ -169,20 +170,26 @@ async def extract_metadata_batch(docs: list, llm_func: callable, batch_size: int
     import json, re, asyncio, time
 
     async def extract_one(doc) -> dict:
-        prompt = f"""You are a research librarian. Extract metadata from this academic paper's first page.
+        prompt = f"""You are a research librarian. Extract metadata from this academic paper.
 Return ONLY valid JSON with these exact keys:
 - "title": paper title (string)
 - "authors": list of author names (list of strings)
 - "year": publication year (string or null)
 - "abstract": first paragraph/sentence (string or null)
+- "references": list of reference strings from the references section
 
-Paper text:\n\n{doc.first_page_snippet[:2000]}"""
+=== START OF PAPER ===
+{doc.start_snippet[:4000] if doc.start_snippet else doc.first_page_snippet[:2000]}
+=== END OF PAPER ===
+{doc.end_snippet[-4000:] if doc.end_snippet else ''}
+
+Return JSON with all fields above. If year/abstract not found, use null. If no references, use empty list."""
 
         response = await llm_func(prompt)
         match = re.search(r'\{.*\}', response, re.DOTALL)
         if match:
             return json.loads(match.group())
-        return {"title": None, "authors": [], "year": None, "abstract": None}
+        return {"title": None, "authors": [], "year": None, "abstract": None, "references": []}
 
     results = []
     for i in range(0, len(docs), batch_size):
@@ -194,7 +201,7 @@ Paper text:\n\n{doc.first_page_snippet[:2000]}"""
         for doc, meta in zip(batch, metas):
             if isinstance(meta, Exception):
                 print(f"    Warning: Failed to extract metadata for {doc.filename}: {meta}")
-                meta = {"title": None, "authors": [], "year": None, "abstract": None}
+                meta = {"title": None, "authors": [], "year": None, "abstract": None, "references": []}
 
             doc.metadata.title = meta.get('title') or doc.filename
             doc.metadata.authors = meta.get('authors', [])

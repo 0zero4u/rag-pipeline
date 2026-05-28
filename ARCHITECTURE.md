@@ -18,13 +18,14 @@ A production-ready RAG pipeline designed to process 100+ academic research PDFs,
 │     │   • Fast Markdown conversion                              │
 │     │   • Table structure (markdown tables)                      │
 │     │   • Formula detection (LaTeX output)                      │
-│     │   • OCR for scanned PDFs                                 │
+│     │   • OCR for scanned PDFs (Tesseract)                       │
 │     │   • No GPU required                                      │
 │     │                                                           │
-│     └─► Metadata Extraction                                      │
-│         ├─► LLM (gemini-3.5-flash)                            │
-│         │   • First ~1500 chars of content                     │
-│         │   • Extracts: title, authors, year, abstract         │
+│     └─► Metadata Extraction (Start + End)                        │
+│         ├─► LLM (DeepSeek v4 Flash)                            │
+│         │   • First 4000 chars (title, authors, abstract)       │
+│         │   • Last 4000 chars (references, conclusion)           │
+│         │   • 2 calls per PDF (not per chunk)                    │
 │         │                                                       │
 │         └─► PDFx (references only)                              │
 │             • Bibliography extraction                            │
@@ -55,6 +56,64 @@ A production-ready RAG pipeline designed to process 100+ academic research PDFs,
 
 ## Data Flow
 
+```
+PDFs
+  │
+  ▼
+parse_single_pdf() ──────────────────────────────────────────┐
+  │                                                             │
+  ├─► pymupdf4llm.to_markdown() → content                      │
+  │                                                             │
+  ├─► extract_references_with_pdfx() → references             │
+  │                                                             │
+  └─► start_snippet (first 4000 chars)                        │
+      end_snippet (last 4000 chars)                            │
+                                                                 │
+  ▼
+extract_metadata_batch() ─────────────────────────────────────┐
+  │                                                             │
+  └─► LLM (DeepSeek v4 Flash)                                  │
+        • Start 4000 + End 4000 chars per PDF                 │
+        • Extracts: title, authors, year, abstract, refs      │
+        • 1 call per PDF (reduced from 8)                      │
+                                                                 │
+  ▼
+Build citation_map.json ──────────────────────────────────────┐
+  │                                                             │
+  └─► {filename: {title, authors, year, abstract, ...}}        │
+      • Source of truth for citation validation                 │
+                                                                 │
+  ▼
+LightRAG.ainsert() ────────────────────────────────────────────┐
+  │                                                             │
+  ├─► Perplexity pplx-embed-v1-0.6b (1024-dim embeddings)     │
+  │                                                             │
+  └─► Entity extraction via LLM (DeepSeek)                    │
+        • 8 chunks per PDF = 8 LLM calls                      │
+        • Creates knowledge graph                               │
+                                                                 │
+  ▼
+query_writer.py ──────────────────────────────────────────────┐
+   │                                                             │
+   ├─► LightRAG.aquery() → chunks with reference_id            │
+   │                                                             │
+   └─► Returns JSON: [{chunk_index, ref_id, content}, ...]     │
+         • chunk_index: 1-based position for [CHUNK-N] citations│
+         • ref_id: document-level reference (same for all chunks│
+           from same file)                                       │
+                                                                 │
+  ▼
+validate_citations.py ────────────────────────────────────────┐
+   │                                                             │
+   ├─► Validates [CHUNK-N] citations against max_chunks         │
+   │     • Rejects [CHUNK-N] where N > returned chunks          │
+   │                                                             │
+   ├─► Checks filename exists in citation_map.json              │
+   │                                                             │
+   └─► Flags hallucinated citations with specific error          │
+         • Human reviews and corrects                            │
+                                                                           │
+   Usage: validate_citations.py /tmp/draft.md --max-chunks N
 ```
 PDFs
   │
@@ -145,6 +204,50 @@ chunk_id=5 → ref_id from chunk → filename → citation_map.json
 | Author name wrong | Compare to citation_map.json | Replace with correct |
 | Year wrong/missing | Compare to citation_map.json | Replace with correct (or "n.d.") |
 
+### Error Handling
+
+When citation validation fails, the system follows this protocol:
+
+| Failure Type | System Response | User Action |
+|--------------|-----------------|-------------|
+| Non-existent chunk citation | Citation marked as `[CHUNK-unverified]` | Verify against source PDF manually |
+| Wrong author name | Replaced with correct name from citation_map.json | Review corrected citation |
+| Missing/invalid year | Replaced with "n.d." | Add year if found in source |
+| Unverifiable claim | Text flagged, writer instructed: "I don't have sufficient information about [topic]" | Re-write claim or provide source |
+
+#### validate_citations.py Protocol
+
+```python
+# When validation detects hallucination:
+1. Log the invalid citation with reference_id and reason
+2. Mark chunk as [CHUNK-unverified] in output
+3. Do NOT remove citation from prose - flag for review
+4. Continue processing remaining citations
+
+# User override:
+- If citation is valid but flagged, user can dismiss false positive
+- Citation remains with warning flag for human review
+```
+
+#### Recovery Workflow
+
+```
+Hallucination Detected
+    ↓
+Flag citation as [CHUNK-unverified]
+    ↓
+Log to validation_report.json
+    ↓
+User reviews flagged citation
+    ↓
+Either: Correct citation with source evidence
+   Or: Remove/re-write claim without citation
+    ↓
+Continue dissertation writing
+```
+
+**Key Principle:** Never suppress citations - always flag and let human verify. The tool prevents hallucinations, but human has final authority.
+
 ---
 
 ## Component Details
@@ -166,12 +269,12 @@ chunk_id=5 → ref_id from chunk → filename → citation_map.json
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Title extraction | ✅ LLM | First ~1500 chars |
+| Title extraction | ✅ LLM | Start 4000 + End 4000 chars |
 | Author extraction | ✅ LLM | Handles multiple authors |
-| Year extraction | ✅ LLM | From first page text |
-| Abstract extraction | ✅ LLM | First paragraph |
-| References list | ✅ PDFx | Bibliography extraction |
-| PDF metadata fields | ❌ Empty | Academic papers rarely fill these |
+| Year extraction | ✅ LLM | From start/end of paper |
+| Abstract extraction | ✅ LLM | First paragraph from start |
+| References list | ✅ LLM + PDFx | From end of paper |
+| LLM calls per PDF | 2 (reduced from 8) | Start + End feeding |
 
 **Key Finding:** Academic papers leave PDF metadata fields empty. Metadata lives in paper text.
 
@@ -204,6 +307,162 @@ Built from parsed PDFs, serves as ground truth for citation validation.
 }
 ```
 
+**Source file:** `src/validate_citations.py`
+
+This script validates `[CHUNK-N]` citations in prose against the indexed chunks:
+```bash
+python3 src/validate_citations.py /path/to/draft.md
+```
+
+Output: JSON report of valid/invalid citations with correction suggestions.
+
+---
+
+## Working Pipeline (E2E Verified)
+
+### Full Flow
+
+```
+1. INDEXING
+   python main.py --mode index --pdf-dir ./data/raw
+   │
+   ├─► Parse PDFs (pymupdf4llm)
+   │     └─► Extract start_snippet (4000 chars) + end_snippet (4000 chars)
+   │
+   ├─► Build citation_map.json
+   │     └─► 1 LLM call per PDF for metadata
+   │
+   └─► Index to LightRAG
+         └─► Embed with Perplexity pplx-embed-v1-0.6b
+         └─► Entity extraction via DeepSeek (8 chunks = 8 calls)
+
+2. QUERYING (via Agent)
+   python query_writer.py "topic" 5
+   │
+   └─► LightRAG.aquery() → chunks with chunk_index and ref_id
+         └─► Returns: [{chunk_index: 1, ref_id: "1", content: "..."}, ...]
+
+3. WRITING (via Agent)
+   │
+   ├─► Agent writes with [CHUNK-N] citations (using chunk_index)
+   │
+   └─► Save to /tmp/draft.md
+
+4. VALIDATION
+   python validate_citations.py /tmp/draft.md --max-chunks N
+   │
+   ├─► Check each [CHUNK-N] where N ≤ max_chunks
+   ├─► Verify filename in citation_map.json
+   └─► Flag invalid citations with specific error message
+```
+
+### E2E Test Results (Verified 2026-05-28)
+
+| Stage | Time | Status |
+|-------|------|--------|
+| Parse PDF | 4.14s | ✅ 41005 chars, 7 pages |
+| Metadata (start+end) | 12.94s | ✅ Title, authors, year extracted |
+| LightRAG init | 0.85s | ✅ |
+| Query | 0.92s | ✅ Returns 8 chunks with chunk_index |
+| Validation | 0.07s | ✅ Works with --max-chunks |
+
+**Hallucination Fix (2026-05-28):**
+
+Root cause: Agent saw 8 chunks all with ref_id=1, hallucinated chunk numbers [CHUNK-4/5/7].
+
+Fix applied:
+1. **query_writer.py**: Returns `chunk_index` (1-based position) for [CHUNK-N] citations
+2. **validate_citations.py**: New `--max-chunks N` flag rejects citations exceeding returned chunks
+3. **lightrag-writer-agent.md**: Updated prompt to clarify chunk_index vs ref_id
+
+**E2E Test (After Fix):**
+
+Prose written:
+> "Khushwant Singh's writing is characterized by straightforwardness, vivid imagery, and an unafraid approach to delicate subjects, employing satire and comedy to engage readers [CHUNK-5]. His style reflects a harmonious fusion of liberal humanism and scientific rationality shaped by both Indian and Western traditions [CHUNK-1]. Train to Pakistan represents his first work to truthfully depict the Partition era, driven by a personal sense of guilt over his failure to intervene during the violence [CHUNK-4]."
+
+Result: ✅ All 3 citations valid (CHUNK-1,4,5 ≤ 5 chunks returned)
+
+**Verified Citation Metadata (7-8-14-837.pdf):**
+| Field | Value |
+|-------|-------|
+| Author | Suman Rani, Dr. Pawan Kumar Sharma |
+| Year | 2024 |
+| Title | A critical study of the portrayal of satire in Khushwant Singh's selected novels |
+
+### Key Insight
+
+All chunks from same document share the same `reference_id` (file-level citation). In naive mode, LightRAG returns multiple text segments but they reference the same document ID.
+
+**IMPORTANT: Use chunk_index for [CHUNK-N] citations**, not ref_id. The chunk_index is the 1-based position in the returned list, unique per retrieved chunk.
+
+---
+
+## Pitfalls and Common Issues
+
+### 1. Path Mismatches
+
+**Issue**: Different components use different working directory paths.
+
+| Component | Expected Path |
+|-----------|---------------|
+| `main.py` | `./working_dir` (relative to src/) |
+| `query_writer.py` | `/home/arshhtripathi/rag-pipeline/src/working_dir` |
+| `validate_citations.py` | `/home/arshhtripathi/rag-pipeline/src/working_dir` |
+
+**Fix**: All paths are now absolute or correctly relative to src/. Always use:
+```python
+working_dir = Path(__file__).parent / "working_dir"  # For scripts in src/
+```
+
+### 2. Cache Stale Data
+
+**Issue**: `all_parsed.json` caches parsed PDFs. When re-indexing different PDFs, old cached data is used.
+
+**Symptom**: Query returns content from wrong PDF despite fresh indexing.
+
+**Fix**: `main.py` now saves fresh cache on each run. Use `--reindex` flag to force fresh parsing.
+
+### 3. LightRAG Duplicate Detection
+
+**Issue**: LightRAG hashes content and refuses to re-index same PDF twice.
+
+**Symptom**: "Duplicate document detected" warning, no new chunks created.
+
+**Fix**: Delete working_dir contents before re-indexing same PDF:
+```bash
+rm -rf /home/arshhtripathi/rag-pipeline/src/working_dir/*
+```
+
+### 4. top_k vs Actual Chunks
+
+**Issue**: `top_k=5` does NOT guarantee 5 chunks returned. LightRAG returns all matching chunks (typically 5-8).
+
+**Symptom**: Agent uses [CHUNK-6] but only asked for 5 chunks.
+
+**Fix**: Always count actual chunks in JSON response. Use `--max-chunks N` where N = actual count.
+
+### 5. Metadata Extraction Failures
+
+**Issue**: Non-standard PDF formats (poor OCR, unusual layouts) fail LLM metadata extraction.
+
+**Symptom**: `citation_map.json` has empty authors, year=null, title=filename.
+
+**Fix**: Manually edit citation_map.json for problematic PDFs, or use PDFs with standard academic format.
+
+### 6. Chunk Index vs Reference ID
+
+**Issue**: All chunks from same file share `ref_id="1"`. Using `ref_id` for citations gives wrong results.
+
+**Symptom**: [CHUNK-2] validated as "ref_id=2" which doesn't exist.
+
+**Fix**: Use `chunk_index` (1-based position) for [CHUNK-N] citations. Validation maps chunk_index to ref_id="1" for filename lookup.
+
+### 7. Naive Mode Single Document Limitation
+
+**Issue**: In naive mode, all chunks come from same document → all have ref_id="1".
+
+**Fix**: The citation validation uses effective_ref_id="1" for all chunk_index lookups since naive mode only indexes one document at a time.
+
 ---
 
 ### 3. RAG Engine
@@ -220,14 +479,17 @@ Used for vector similarity search. Naive mode = no entity extraction = faster in
 
 #### Query Response Format
 
-LightRAG returns context with `reference_id`:
+query_writer.py returns chunks with both `chunk_index` and `reference_id`:
 
 ```json
 [
-  {"reference_id": "1", "content": "First chunk text..."},
-  {"reference_id": "2", "content": "Second chunk text..."}
+  {"chunk_index": 1, "ref_id": "1", "content": "First chunk text..."},
+  {"chunk_index": 2, "ref_id": "1", "content": "Second chunk text..."}
 ]
 ```
+
+- **chunk_index**: 1-based position in returned list → use for [CHUNK-N] citations
+- **ref_id**: document-level reference (same for all chunks from same file)
 
 ---
 
@@ -358,4 +620,4 @@ asyncio.run(main())
 
 ## Last Updated
 
-2026-05-28
+2026-05-28 (Pitfalls section added: path mismatches, cache issues, duplicate detection, top_k vs actual chunks, metadata failures, chunk_index vs ref_id)
