@@ -69,7 +69,9 @@ async def run_pipeline(
     print(f"Using LLM model: {llm_model}")
     
     # Step 4: Index documents
+    import time
     print("\n[4/4] Indexing documents into LightRAG...")
+    t_start = time.time()
 
     # Load parsed results - use freshly parsed PDFs, not stale cache
     all_parsed_path = output_dir / "all_parsed.json"
@@ -83,6 +85,8 @@ async def run_pipeline(
         with open(all_parsed_path, 'w', encoding='utf-8') as f:
             json.dump(all_parsed, f, indent=2, ensure_ascii=False, cls=PDFEncoder)
     
+    print(f"  Load parsed: {time.time() - t_start:.1f}s")
+    
     # Insert documents with file paths
     documents = []
     file_paths = []
@@ -95,12 +99,18 @@ async def run_pipeline(
             documents.append(content)
             file_paths.append(filename)
     
+    print(f"  Prepare docs: {time.time() - t_start:.1f}s")
+    
     if documents:
         print(f"Inserting {len(documents)} documents...")
+        t_insert = time.time()
         await rag.ainsert(documents, file_paths=file_paths)
+        print(f"  Insert: {time.time() - t_insert:.1f}s")
         print("Indexing complete!")
     else:
         print("No documents to index")
+    
+    print(f"  Total indexing: {time.time() - t_start:.1f}s")
     
     print("\n" + "=" * 60)
     print("Pipeline complete!")
