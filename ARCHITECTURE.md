@@ -463,6 +463,35 @@ rm -rf /home/arshhtripathi/rag-pipeline/src/working_dir/*
 
 **Fix**: The citation validation uses effective_ref_id="1" for all chunk_index lookups since naive mode only indexes one document at a time.
 
+### 8. Multi-PDF Retrieval Behavior
+
+**Behavior**: When multiple PDFs are indexed, `top_k=5` returns the 5 most similar chunks from **ALL indexed PDFs**, not top 5 per PDF.
+
+**Example with 2 PDFs indexed:**
+```
+top_k=5 might return 9 chunks:
+├── ref_id=1 (Partition_Violence...pdf): [CHUNK-1, 2, 3, 4, 6, 7]
+└── ref_id=2 (Portrayal of Violence...pdf): [CHUNK-5, 8, 9]
+```
+
+**Note**: LightRAG may return more than `top_k` due to:
+- Tied similarity scores
+- Internal chunk_top_k setting
+- Same-document chunk grouping
+
+**Fix**: Always count actual chunks in JSON array for `--max-chunks`.
+
+### 9. top_k vs Actual Returned Chunks
+
+**Issue**: `top_k` parameter is a hint, not a guarantee.
+
+| top_k | Actual Chunks | Reason |
+|-------|---------------|--------|
+| 5 | 5-9 | Ties, internal grouping |
+| 10 | 10-15 | Similar behavior |
+
+**Recommendation**: With 100 PDFs, use `top_k=10-20` for better coverage. LLM has 1M context, cost is minimal for text chunks.
+
 ---
 
 ### 3. RAG Engine
@@ -592,6 +621,21 @@ asyncio.run(main())
 
 ---
 
+## What We DON'T Need
+
+### Cohere Rerank
+- **Not needed** ❌
+- Adds latency and cost
+- LightRAG cosine similarity + LLM's 1M context is sufficient
+- Rerank warning appears in logs but can be ignored
+
+### auditor.py
+- **Not integrated** ❌
+- Standalone CitationAuditor class exists but not used
+- We use `validate_citations.py` for citation validation instead
+
+---
+
 ## Status Summary
 
 | Component | Status | Notes |
@@ -601,9 +645,12 @@ asyncio.run(main())
 | PDFx references | ✅ Complete | Bibliography only |
 | citation_map.json | ✅ Complete | Ground truth for validation |
 | LightRAG | ✅ Complete | Naive mode for Q&A |
-| Embeddings | ✅ Complete | qwen/qwen3-embedding-8b |
+| Embeddings | ✅ Complete | perplexity/pplx-embed-v1-0.6b |
 | Citation validation | ✅ Complete | Catches hallucinations |
-| query_with_citations | ✅ Complete | Returns structured citations |
+| query_writer.py | ✅ Complete | chunk_index for citations |
+| validate_citations.py | ✅ Complete | --max-chunks flag |
+| Cohere Rerank | ❌ Not needed | LightRAG similarity sufficient |
+| auditor.py | ❌ Not used | validate_citations.py in use |
 
 **Architecture: 100% Resolved**
 
@@ -620,4 +667,4 @@ asyncio.run(main())
 
 ## Last Updated
 
-2026-05-28 (Pitfalls section added: path mismatches, cache issues, duplicate detection, top_k vs actual chunks, metadata failures, chunk_index vs ref_id)
+2026-05-28 (Multi-PDF retrieval, top_k behavior, cohere rerank not needed, auditor.py not used)
