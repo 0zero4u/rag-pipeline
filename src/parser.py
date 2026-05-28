@@ -47,6 +47,11 @@ class PDFMetadata:
     authors: list[str]
     year: Optional[str]
     doi: str
+    journal: str
+    volume: str
+    issue: str
+    pages: str
+    publisher: str
     abstract: str
     references: list[dict]
     source: str  # 'llm', 'pdfx', 'filename'
@@ -73,15 +78,19 @@ def extract_metadata_with_llm(start_text: str, end_text: str, llm_func: callable
 
     t0 = time.time()
     
-    prompt = f"""Extract metadata from this academic paper. Return ONLY valid JSON.
+    prompt = f"""Extract complete metadata from this academic paper. Return ONLY valid JSON.
 
 LOOK CAREFULLY at the START of the paper for:
 - Title: Usually in large/bold text near the top
 - Authors: Usually after the title, often with affiliations
 - Year: Usually in parentheses after title or in publication info
+- Journal name: Look for "Journal of...", "Published in...", or header/footer
+- Volume/Issue: "Vol. #, No. #" format
+- Page range: "pp. #-#" format
 
 LOOK at the END of the paper for:
 - References/Bibliography section
+- Publisher information
 
 === START OF PAPER (first 2000 chars) ===
 {start_text[:2000]}
@@ -89,9 +98,9 @@ LOOK at the END of the paper for:
 {end_text[-1000:]}
 
 Return EXACTLY this JSON format:
-{{"title": "paper title", "authors": ["Author One", "Author Two"], "year": "2024", "abstract": "first paragraph", "references": []}}
+{{"title": "paper title", "authors": ["Author One", "Author Two"], "year": "2024", "journal": "Journal Name", "volume": "1", "issue": "2", "pages": "100-120", "publisher": "Publisher Name", "doi": "10.xxxx/xxxxx", "abstract": "first paragraph", "references": []}}
 
-If you cannot find a field, use null for year or empty list for authors. Do NOT make up information."""
+If you cannot find a field, use null. Do NOT make up information."""
 
     try:
         try:
@@ -241,7 +250,12 @@ def parse_single_pdf(pdf_path: str, llm_func: callable = None) -> ParsedPDF:
             title=meta.get('title') or filename,
             authors=meta.get('authors', []),
             year=meta.get('year'),
-            doi='',
+            doi=meta.get('doi', ''),
+            journal=meta.get('journal', ''),
+            volume=meta.get('volume', ''),
+            issue=meta.get('issue', ''),
+            pages=meta.get('pages', ''),
+            publisher=meta.get('publisher', ''),
             abstract=meta.get('abstract', ''),
             references=references + meta.get('references', []),
             source='llm',
@@ -253,6 +267,11 @@ def parse_single_pdf(pdf_path: str, llm_func: callable = None) -> ParsedPDF:
             authors=[],
             year=None,
             doi='',
+            journal='',
+            volume='',
+            issue='',
+            pages='',
+            publisher='',
             abstract='',
             references=references,
             source='pending',

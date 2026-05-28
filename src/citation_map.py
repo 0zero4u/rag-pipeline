@@ -21,6 +21,11 @@ class CitationEntry:
     authors: list[str]
     year: str
     doi: str
+    journal: str
+    volume: str
+    issue: str
+    pages: str
+    publisher: str
     reference_keys: list[str]
 
 
@@ -116,6 +121,11 @@ def build_citation_map( parsed_pdfs: list[dict], output_path: Optional[str] = No
             authors=meta_dict.get('authors', []) or [],
             year=meta_dict.get('year', 'n.d.'),
             doi=meta_dict.get('doi', ''),
+            journal=meta_dict.get('journal', ''),
+            volume=meta_dict.get('volume', ''),
+            issue=meta_dict.get('issue', ''),
+            pages=meta_dict.get('pages', ''),
+            publisher=meta_dict.get('publisher', ''),
             reference_keys=reference_keys
         )
         
@@ -156,8 +166,28 @@ def load_citation_map(citation_map_path: str) -> CitationMap:
     with open(citation_map_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
     
+    # Convert citations dicts to CitationEntry objects
+    citations = {}
+    for filename, citation_data in data['citations'].items():
+        if isinstance(citation_data, dict):
+            citations[filename] = CitationEntry(
+                filename=filename,
+                title=citation_data.get('title', 'Unknown'),
+                authors=citation_data.get('authors', []),
+                year=citation_data.get('year', 'n.d.'),
+                doi=citation_data.get('doi', ''),
+                journal=citation_data.get('journal', ''),
+                volume=citation_data.get('volume', ''),
+                issue=citation_data.get('issue', ''),
+                pages=citation_data.get('pages', ''),
+                publisher=citation_data.get('publisher', ''),
+                reference_keys=citation_data.get('reference_keys', [])
+            )
+        else:
+            citations[filename] = citation_data
+    
     return CitationMap(
-        citations=data['citations'],
+        citations=citations,
         author_index=data['author_index'],
         year_index=data['year_index']
     )
