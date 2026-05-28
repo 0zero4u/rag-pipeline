@@ -163,6 +163,7 @@ async def initialize_lightrag(
         vector_storage="NanoVectorDBStorage",
         graph_storage="NetworkXStorage",
         enable_llm_cache_for_entity_extract=True,
+        cosine_better_than_threshold=0.1,
     )
 
     await rag.initialize_storages()

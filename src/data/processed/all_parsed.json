@@ -12,7 +12,7 @@
       "abstract": "The historiography of the partition of the subcontinent results into the creation of many different facets of the society. The society at the time and before the time of partition faced the innumerable losses. The indelible marks on the face of society were not easily removed. All the historical events had a deeper influence on the minds of the people, writers and of the society. The proposed partition of the country left it to witness the upheaval of unimaginable proportions on the eve of independence. The communal riots engulfed the country.",
       "references": [
         {
-          "ref": "http://science.jrank.org/pages/11657/Women-S-Studies-Theories-Assumptions.html",
+          "ref": "http://www.academia.edu/4708846/Looking_at_Partition_through_Tamas",
           "reftype": "url",
           "page": 6,
           "pdf_regex": "\\.pdf(:?\\?.*)?$"
@@ -24,7 +24,7 @@
           "pdf_regex": "\\.pdf(:?\\?.*)?$"
         },
         {
-          "ref": "http://www.academia.edu/4708846/Looking_at_Partition_through_Tamas",
+          "ref": "http://science.jrank.org/pages/11657/Women-S-Studies-Theories-Assumptions.html",
           "reftype": "url",
           "page": 6,
           "pdf_regex": "\\.pdf(:?\\?.*)?$"
@@ -35,19 +35,14 @@
           "page": 6,
           "pdf_regex": "\\.pdf(:?\\?.*)?$"
         },
-        "1) Bhalla, Alok. Partition Dialogues: Memories of a Lost Home. Oxford University Press: New Delhi. 2006. Print.",
-        "2) Butalia, Urvashi. The Other Side of Silence Voices from the Partition of India. Penguin Books: New Delhi. 1998. Print.",
-        "3) Dwivedi, A. N. Novels of Manohar Malgonkar. Harman Publishing House: New Delhi. 1998. Print.",
-        "4) Khushwant Singh. Train to Pakistan. Time Inc., New York, 1956. Print.",
-        "5) Manohar Malgonkar. A Bend in the Ganges. Orient Paperbacks: New Delhi. 1965. Print.",
-        "6) Menon, Ritu & Kamla Bhasin. Borders and Boundaries Women in India’s Partition. Printed at De Unique, New Delhi. 2011. Print.",
-        "7) Scott, Joan Wallach. 'Women's History and the Rewriting of History' in Christie Farnham (ed.), The Impact of Feminist Research in the Academy (Bloomington: Indiana University Press, 1987), P. 36. Print.",
-        "8) Sharma, K. K. and B. K. Johri. The Partition in Indian English Novels. Vimal Prakashan: New Delhi. 1984. Print.",
-        "9) Shaikh, Firoz A. Partition a Human Tragedy IST Edition Sarup Book Publishers. 2009. Print.",
-        "10) http://shodh.inflibnet.ac.in:8080/jspui/bitstream/123456789/751/3/03_literatur review.pdf",
-        "11) file:///C:/AnAndrocentricandGynocentricPerspectivofWomenasVictimsinPartitio...EBSCOhost.htm#db=qoh&AN=73528658",
-        "12) http://www.academia.edu/4708846/Looking_at_Partition_through_Tamas",
-        "13) http://science.jrank.org/pages/11657/Women-S-Studies-Theories-Assumptions.html"
+        "la Bhasin. _Borders and Boundaries Women in India’s Partition._ Printed at De Unique, New Delhi.2011. Print.",
+        "Scott, Joan Wallach. \"Women's History and the Rewriting of History\" in Christie Farnham (ed.), _The Impact of Feminist Research in the Academy_ (Bloomington: Indiana University Press, 1987), P. 36. Print.",
+        "Sharma, K. K. and B. K. Johri. _The Partition in Indian English Novels_ . Vimal Prakashan: New Delhi. 1984. Print.",
+        "Shaikh, Firoz A. _Partition a Human Tragedy IST Edition_ Sarup Book Publishers _._ 2009. Print.",
+        "http://shodh.inflibnet.ac.in:8080/jspui/bitstream/123456789/751/3/03_literatur review.pdf.",
+        "file:///C:/AnAndrocentricandGynocentricPerspectivofWomenasVictimsinPartitio...EBS COhost.htm#db=qoh&AN=73528658",
+        "http://www.academia.edu/4708846/Looking_at_Partition_through_Tamas",
+        "http://science.jrank.org/pages/11657/Women-S-Studies-Theories-Assumptions.html"
       ],
       "source": "llm",
       "confidence": "high"

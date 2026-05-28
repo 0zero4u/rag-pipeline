@@ -45,6 +45,88 @@ entity, EntityName, EntityType, EntityDescription
 
 ---
 
+## Change: Metadata Extraction Fixed
+
+**Date**: 2026-05-28  
+**Reason**: citation_map.json had empty metadata (no authors, year)
+
+### Files Changed
+
+| # | File | Change |
+|---|------|--------|
+| 1 | `src/parser.py` | Added llm_func parameter to parse_single_pdf/parse_pdfs |
+| 2 | `src/parser.py` | Call extract_metadata_with_llm during parsing |
+| 3 | `src/main.py` | Create LLM function and pass to parser |
+| 4 | `src/citation_map.py` | Handle string references in build_reference_key |
+
+### How It Works
+
+1. During PDF parsing, LLM extracts title, authors, year from content
+2. Metadata stored in parsed JSON files
+3. citation_map.json built from parsed metadata
+4. CitationAdderAgent uses citation_map.json for MLA conversion
+
+### If Metadata Extraction Fails
+
+Check `[Metadata]` logs for:
+- LLM response time
+- Response length
+- Extracted fields
+
+---
+
+## Change: top_k (5 → 150)
+
+**Date**: 2026-05-28  
+**Reason**: Chapter writing needs broader evidence (150 chunks per query)
+
+### Files Changed
+
+| # | File | Line(s) | Change |
+|---|------|---------|--------|
+| 1 | `src/query_writer.py` | 21 | `top_k: int = 5` → `top_k: int = 150` |
+| 2 | `src/query_writer.py` | 94 | `else 5` → `else 150` |
+| 3 | `~/.config/opencode/agents/lightrag-writer-agent.md` | 33, 126, 151 | `5` → `150` |
+
+---
+
+## Change: OCR Disabled
+
+**Date**: 2026-05-28  
+**Reason**: Speed up indexing for text-based PDFs
+
+### Files Changed
+
+| # | File | Change |
+|---|------|--------|
+| 1 | `src/parser.py:131` | `pymupdf4llm.to_markdown(pdf_path, use_ocr=False)` |
+
+### Impact
+
+- ⚡ ~1000x faster for text PDFs
+- ⚠️ Scanned pages return empty strings
+- ✅ Academic papers (mostly text) unaffected
+
+---
+
+## Change: Rate Limiting
+
+**Date**: 2026-05-28  
+**Reason**: Prevent 429 errors from OpenRouter
+
+### Files Changed
+
+| # | File | Change |
+|---|------|--------|
+| 1 | `src/config.py:82-97` | Add 0.3s delay between LLM calls |
+
+### Configuration
+
+- **Delay**: 0.3s between calls
+- **Adjustment**: Change `0.3` in config.py to increase/decrease
+
+---
+
 ## Change: Resume Functionality (Parser)
 
 **Date**: 2026-05-28  

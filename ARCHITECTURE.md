@@ -333,20 +333,20 @@ Output: JSON report of valid/invalid citations with correction suggestions.
 
 ```
 1. INDEXING
-   python main.py --mode index --pdf-dir ./data/raw
+   python main.py --mode index --pdf-dir ./data/raw --llm-model deepseek/deepseek-v4-flash
    │
-   ├─► Parse PDFs (pymupdf4llm)
-   │     └─► Extract start_snippet (4000 chars) + end_snippet (4000 chars)
+   ├─► Parse PDFs (pymupdf4llm, OCR disabled)
+   │     └─► Extract content + metadata via LLM (title, authors, year)
    │
    ├─► Build citation_map.json
-   │     └─► 1 LLM call per PDF for metadata
+   │     └─► 1 LLM call per PDF for metadata extraction
    │
    └─► Index to LightRAG
          └─► Embed with Perplexity pplx-embed-v1-0.6b
-         └─► Entity extraction via DeepSeek (8 chunks = 8 calls)
+         └─► Entity extraction via GLiNER (0.2s/chunk, local CPU)
 
 2. QUERYING (via Agent)
-   python query_writer.py "topic" 5
+   python query_writer.py "topic" 150
    │
    └─► LightRAG.aquery() → chunks with chunk_index and ref_id
          └─► Returns: [{chunk_index: 1, ref_id: "1", content: "..."}, ...]
@@ -363,40 +363,36 @@ Output: JSON report of valid/invalid citations with correction suggestions.
    ├─► Check each [CHUNK-N] where N ≤ max_chunks
    ├─► Verify filename in citation_map.json
    └─► Flag invalid citations with specific error message
+
+5. HUMANIZATION (via Agent)
+   └─► HumanizeAgent paraphrases, preserves [CHUNK-N] markers
+         └─► Save to /tmp/humanized_draft.md
+
+6. CITATION CONVERSION (via Agent)
+   └─► CitationAdderAgent converts [CHUNK-N] → MLA format
+         └─► Save to /tmp/final_draft.md
 ```
 
 ### E2E Test Results (Verified 2026-05-28)
 
 | Stage | Time | Status |
 |-------|------|--------|
-| Parse PDF | 4.14s | ✅ 41005 chars, 7 pages |
-| Metadata (start+end) | 12.94s | ✅ Title, authors, year extracted |
-| LightRAG init | 0.85s | ✅ |
-| Query | 0.92s | ✅ Returns 8 chunks with chunk_index |
-| Validation | 0.07s | ✅ Works with --max-chunks |
+| Parse PDF | ~2s | ✅ Content + metadata extracted |
+| Metadata extraction | ~14-34s | ✅ Title, authors, year via LLM |
+| GLiNER entity extraction | ~0.2s/chunk | ✅ 40x faster than LLM |
+| LightRAG init | ~1s | ✅ |
+| Query (150 chunks) | ~1s | ✅ Returns chunks with chunk_index |
+| Humanize | ~29s | ✅ Preserves [CHUNK-N] markers |
+| Citation conversion | ~36s | ✅ Converts to MLA format |
+| Validation | ~0.1s | ✅ Works with --max-chunks |
 
-**Hallucination Fix (2026-05-28):**
-
-Root cause: Agent saw 8 chunks all with ref_id=1, hallucinated chunk numbers [CHUNK-4/5/7].
-
-Fix applied:
-1. **query_writer.py**: Returns `chunk_index` (1-based position) for [CHUNK-N] citations
-2. **validate_citations.py**: New `--max-chunks N` flag rejects citations exceeding returned chunks
-3. **lightrag-writer-agent.md**: Updated prompt to clarify chunk_index vs ref_id
-
-**E2E Test (After Fix):**
-
-Prose written:
-> "Khushwant Singh's writing is characterized by straightforwardness, vivid imagery, and an unafraid approach to delicate subjects, employing satire and comedy to engage readers [CHUNK-5]. His style reflects a harmonious fusion of liberal humanism and scientific rationality shaped by both Indian and Western traditions [CHUNK-1]. Train to Pakistan represents his first work to truthfully depict the Partition era, driven by a personal sense of guilt over his failure to intervene during the violence [CHUNK-4]."
-
-Result: ✅ All 3 citations valid (CHUNK-1,4,5 ≤ 5 chunks returned)
-
-**Verified Citation Metadata (7-8-14-837.pdf):**
-| Field | Value |
-|-------|-------|
-| Author | Suman Rani, Dr. Pawan Kumar Sharma |
-| Year | 2024 |
-| Title | A critical study of the portrayal of satire in Khushwant Singh's selected novels |
+**Current Configuration:**
+- **LLM**: deepseek/deepseek-v4-flash (OpenRouter)
+- **Embedding**: perplexity/pplx-embed-v1-0.6b (OpenRouter)
+- **Entity Extraction**: GLiNER (local CPU, 0.2s/chunk)
+- **OCR**: Disabled (use_ocr=False)
+- **Rate Limiting**: 0.3s between LLM calls
+- **top_k**: 150 chunks per query
 
 ### Key Insight
 
@@ -471,33 +467,35 @@ rm -rf /home/arshhtripathi/rag-pipeline/src/working_dir/*
 
 ### 4. top_k vs Actual Chunks
 
-**Issue**: `top_k=5` does NOT guarantee 5 chunks returned. LightRAG returns all matching chunks (typically 5-8).
+**Issue**: `top_k=150` does NOT guarantee 150 chunks returned. LightRAG returns all matching chunks (typically up to top_k).
 
-**Symptom**: Agent uses [CHUNK-6] but only asked for 5 chunks.
+**Symptom**: Agent uses [CHUNK-160] but only asked for 150 chunks.
 
 **Fix**: Always count actual chunks in JSON response. Use `--max-chunks N` where N = actual count.
 
-### 5. Metadata Extraction Failures
+### 5. Metadata Extraction
 
-**Issue**: Non-standard PDF formats (poor OCR, unusual layouts) fail LLM metadata extraction.
+**Status**: ✅ Fixed (2026-05-28)
 
-**Symptom**: `citation_map.json` has empty authors, year=null, title=filename.
+**How it works**: LLM extracts title, authors, year from PDF content during parsing.
 
-**Fix**: Manually edit citation_map.json for problematic PDFs, or use PDFs with standard academic format.
+**If extraction fails**: Check `[Metadata]` logs for LLM response issues.
 
-### 6. Chunk Index vs Reference ID
+### 6. GLiNER Entity Extraction
 
-**Issue**: All chunks from same file share `ref_id="1"`. Using `ref_id` for citations gives wrong results.
+**Status**: ✅ Active (2026-05-28)
 
-**Symptom**: [CHUNK-2] validated as "ref_id=2" which doesn't exist.
+**How it works**: GLiNER extracts entities locally (0.2s/chunk) instead of LLM (8s/chunk).
 
-**Fix**: Use `chunk_index` (1-based position) for [CHUNK-N] citations. Validation maps chunk_index to ref_id="1" for filename lookup.
+**If extraction fails**: Check `[GLiNER]` logs for model loading or extraction issues.
 
-### 7. Naive Mode Single Document Limitation
+### 7. Rate Limiting
 
-**Issue**: In naive mode, all chunks come from same document → all have ref_id="1".
+**Status**: ✅ Active (2026-05-28)
 
-**Fix**: The citation validation uses effective_ref_id="1" for all chunk_index lookups since naive mode only indexes one document at a time.
+**How it works**: 0.3s delay between LLM calls to prevent 429 errors.
+
+**If rate limited**: Increase delay in `config.py` or wait for reset.
 
 ### 8. Multi-PDF Retrieval Behavior
 
