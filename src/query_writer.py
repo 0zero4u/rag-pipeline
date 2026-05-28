@@ -34,9 +34,21 @@ async def query_chunks(query: str, top_k: int = 150) -> list[dict]:
     from config import initialize_lightrag, create_llm_func
 
     working_dir = "/home/arshhtripathi/rag-pipeline/src/working_dir"
+    
+    # Load saved embedding model config
+    embedding_model = "perplexity/pplx-embed-v1-0.6b"
+    try:
+        import json
+        config_path = Path(working_dir) / "config.json"
+        if config_path.exists():
+            with open(config_path) as f:
+                saved_config = json.load(f)
+                embedding_model = saved_config.get("embedding_model", embedding_model)
+    except Exception:
+        pass
 
     try:
-        config = await initialize_lightrag(working_dir=str(working_dir))
+        config = await initialize_lightrag(working_dir=str(working_dir), embedding_model=embedding_model)
     except Exception as e:
         return [{"ref_id": "error", "content": f"Failed to initialize LightRAG: {e}"}]
 

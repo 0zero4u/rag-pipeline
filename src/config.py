@@ -54,8 +54,13 @@ def create_embedding_func(model: str = "qwen/qwen3-embedding-8b") -> dict:
 
         return np.array([item.embedding for item in response.data])
 
+    # Get actual embedding dimension from a test call
+    test_response = client.embeddings.create(model=model, input=["test"])
+    actual_dim = len(test_response.data[0].embedding)
+    print(f"Embedding model {model}: {actual_dim} dimensions")
+    
     return EmbeddingFunc(
-        embedding_dim=1024,
+        embedding_dim=actual_dim,
         max_token_size=8192,
         func=embed_func,
     )
@@ -163,7 +168,6 @@ async def initialize_lightrag(
         vector_storage="NanoVectorDBStorage",
         graph_storage="NetworkXStorage",
         enable_llm_cache_for_entity_extract=True,
-        cosine_better_than_threshold=0.1,
     )
 
     await rag.initialize_storages()
