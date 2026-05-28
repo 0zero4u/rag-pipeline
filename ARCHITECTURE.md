@@ -14,16 +14,19 @@ A production-ready RAG (Retrieval-Augmented Generation) pipeline designed to pro
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │  1. PARSING LAYER                                               │
-│     ├─► Docling                                                 │
-│     │   • Multi-column text extraction                          │
-│     │   • Table structure                                       │
-│     │   • Formulas and figures                                  │
+│     ├─► pymupdf4llm                                             │
+│     │   • Fast Markdown conversion                              │
+│     │   • Table structure (markdown tables)                      │
+│     │   • Formula detection (LaTeX output)                       │
 │     │   • Layout preservation                                   │
+│     │   • OCR for scanned PDFs                                  │
+│     │   • No GPU required                                       │
 │     │                                                           │
 │     └─► PDFx                                                    │
 │         • Author extraction                                     │
 │         • Reference list extraction                             │
 │         • DOI extraction                                        │
+│         • Citation extraction (author, year, title)              │
 │         • Builds citation_map.json                              │
 │                                                                 │
 │  2. THE RAG ENGINE                                              │
@@ -54,30 +57,32 @@ A production-ready RAG (Retrieval-Augmented Generation) pipeline designed to pro
 
 ### 1. Parsing Layer
 
-#### Docling (Primary Parser)
+#### pymupdf4llm (Primary Content Extractor)
 
 | Feature | Status |
 |---------|--------|
 | Multi-column text extraction | ✅ Supported |
-| Table structure extraction | ✅ Supported |
-| Formula recognition | ✅ Supported |
+| Table structure extraction | ✅ Supported (Markdown tables) |
+| Formula recognition | ✅ Supported (LaTeX output) |
 | Layout preservation | ✅ Supported |
 | OCR for scanned PDFs | ✅ Supported |
-| Author extraction | ❌ Not implemented (Coming soon) |
-| Reference extraction | ⚠️ Partial |
+| Fast Markdown conversion | ✅ 10-250× faster than vision-based |
+| No GPU required | ✅ Runs on any machine |
+| Reference extraction | ❌ Use PDFx for this |
 
 **Installation:**
 ```bash
-pip install docling
+pip install pymupdf4llm
 ```
 
 **Usage:**
 ```python
-from docling.document_converter import DocumentConverter
+import pymupdf4llm
 
-converter = DocumentConverter()
-result = converter.convert("paper.pdf")
-content = result.document.export_to_markdown()
+md = pymupdf4llm.to_markdown("paper.pdf")
+
+# With page chunks for RAG
+chunks = pymupdf4llm.to_markdown("paper.pdf", page_chunks=True)
 ```
 
 #### PDFx (Metadata Extractor)
@@ -248,12 +253,12 @@ response = llm.generate_content(prompt)
 
 ```
 PDFs
- ↓
-Docling ──────► Content (text, tables, structure)
-PDFx ─────────► Metadata (authors, refs) ──► citation_map.json
- ↓
-LightRAG ─────► Knowledge Graph (qwen3-embedding-8b for vectors)
- ↓
+  ↓
+Marker-PDF ─────► Content (Markdown, tables, formulas)
+PDFx ──────────► Metadata (authors, refs) ──► citation_map.json
+  ↓
+LightRAG ──────► Knowledge Graph (qwen3-embedding-8b for vectors)
+  ↓
 Query ─────────► LLM (gemini-2.0-flash) ──► Answer + Citations
                 ↘
                  cohere/rerank-4-fast (re-rank results)
@@ -326,10 +331,10 @@ def query_with_citations(query: str, rag, citation_map):
 
 ```bash
 # Core dependencies
-pip install docling pdfx lightrag-hku
+pip install pymupdf4llm pdfx lightrag-hku
 
 # API Clients
-pip install openrouter cohere
+pip install openai
 
 # Utilities
 pip install python-dotenv tqdm
@@ -412,8 +417,8 @@ def rerank(query, documents, top_n=5):
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| Docling | ✅ Complete | Primary parser |
-| PDFx | ✅ Complete | Metadata extraction |
+| pymupdf4llm | ✅ Complete | Primary content extractor |
+| PDFx | ✅ Complete | Metadata + citation extraction |
 | LightRAG | ✅ Complete | KG construction |
 | Reranker | ✅ Complete | cohere/rerank-4-fast via OpenRouter |
 | Embeddings | ✅ Complete | qwen/qwen3-embedding-8b via OpenRouter |
@@ -426,7 +431,7 @@ def rerank(query, documents, top_n=5):
 
 ## References
 
-- [Docling GitHub](https://github.com/docling-project/docling)
+- [pymupdf4llm GitHub](https://github.com/pymupdf/pymupdf4llm)
 - [LightRAG GitHub](https://github.com/HKUDS/LightRAG)
 - [PDFx Documentation](https://github.com/metachris/pdfx)
 - [Cohere Rerank via OpenRouter](https://openrouter.ai/cohere/rerank-4-fast)

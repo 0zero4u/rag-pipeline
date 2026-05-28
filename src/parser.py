@@ -1,7 +1,7 @@
 """
 PDF Parser Module
 =================
-Parses PDFs using Docling (content) and PDFx (metadata).
+Parses PDFs using pymupdf4llm (content) and PDFx (metadata).
 Produces structured output for LightRAG ingestion.
 """
 
@@ -13,10 +13,14 @@ from dataclasses import dataclass, asdict
 
 from tqdm import tqdm
 
-# PDF processing
-from docling.document_converter import DocumentConverter
-from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import PdfPipelineOptions
+# pymupdf4llm for content extraction (tables, formulas, OCR)
+try:
+    import pymupdf4llm
+    PYMUPDF4LLM_AVAILABLE = True
+except ImportError:
+    print("Warning: pymupdf4llm not installed. Using PyMuPDF only.")
+    PYMUPDF4LLM_AVAILABLE = False
+    import pymupdf
 
 # Metadata extraction
 try:
@@ -48,60 +52,35 @@ class ParsedPDF:
     has_formulas: bool = False
 
 
-def parse_pdf_with_docling(pdf_path: str, max_pages: Optional[int] = None) -> dict:
+def parse_pdf_with_pymupdf4llm(pdf_path: str) -> dict:
     """
-    Parse PDF using Docling to extract content and structure.
-    
-    Args:
-        pdf_path: Path to PDF file
-        max_pages: Maximum number of pages to process (None for all)
-    
-    Returns:
-        dict with 'content', 'page_count', 'has_tables', 'has_formulas'
+    Parse PDF using pymupdf4llm for Markdown conversion with tables/formulas.
+    Falls back to plain PyMuPDF if pymupdf4llm unavailable.
     """
     try:
-        # Configure pipeline options
-        pipeline_options = PdfPipelineOptions()
+        if PYMUPDF4LLM_AVAILABLE:
+            md = pymupdf4llm.to_markdown(pdf_path)
+            content = md
+        else:
+            import pymupdf
+            doc = pymupdf.open(pdf_path)
+            text_parts = []
+            for page in doc:
+                text_parts.append(page.get_text("text"))
+            content = "\n\n".join(text_parts)
         
-        # Create converter
-        converter = DocumentConverter(
-            format_options={
-                InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
-            }
-        )
-        
-        # Convert PDF
-        result = converter.convert(pdf_path)
-        doc = result.document
-        
-        # Export to markdown for content
-        content = doc.export_to_markdown()
-        
-        # Get page count
-        page_count = len(doc.pages) if hasattr(doc, 'pages') else 0
-        
-        # Check for tables and formulas
-        has_tables = False
-        has_formulas = False
-        
-        # Count elements
-        if hasattr(doc, 'elements'):
-            for elem in doc.elements:
-                elem_type = str(type(elem).__name__).lower()
-                if 'table' in elem_type:
-                    has_tables = True
-                if 'formula' in elem_type or 'equation' in elem_type:
-                    has_formulas = True
+        import pymupdf
+        doc = pymupdf.open(pdf_path)
+        page_count = len(doc)
         
         return {
             'content': content,
             'page_count': page_count,
-            'has_tables': has_tables,
-            'has_formulas': has_formulas
+            'has_tables': '|' in content and '---' in content,
+            'has_formulas': '$$' in content or '\\(' in content
         }
-    
     except Exception as e:
-        print(f"Error parsing {pdf_path} with Docling: {e}")
+        print(f"Error parsing {pdf_path}: {e}")
         return {
             'content': '',
             'page_count': 0,
@@ -150,20 +129,12 @@ def extract_metadata_with_pdfx(pdf_path: str) -> Optional[PDFMetadata]:
 
 def parse_single_pdf(pdf_path: str, extract_metadata: bool = True) -> ParsedPDF:
     """
-    Parse a single PDF using both Docling and PDFx.
-    
-    Args:
-        pdf_path: Path to PDF file
-        extract_metadata: Whether to extract metadata with PDFx
-    
-    Returns:
-        ParsedPDF object
+    Parse a single PDF using pymupdf4llm and PDFx.
     """
     pdf_path = str(pdf_path)
     filename = Path(pdf_path).name
     
-    # Parse content with Docling
-    docling_result = parse_pdf_with_docling(pdf_path)
+    result = parse_pdf_with_pymupdf4llm(pdf_path)
     
     # Extract metadata with PDFx if requested
     metadata = None
@@ -172,11 +143,11 @@ def parse_single_pdf(pdf_path: str, extract_metadata: bool = True) -> ParsedPDF:
     
     return ParsedPDF(
         filename=filename,
-        content=docling_result['content'],
+        content=result['content'],
         metadata=metadata,
-        page_count=docling_result['page_count'],
-        has_tables=docling_result['has_tables'],
-        has_formulas=docling_result['has_formulas']
+        page_count=result['page_count'],
+        has_tables=result['has_tables'],
+        has_formulas=result['has_formulas']
     )
 
 

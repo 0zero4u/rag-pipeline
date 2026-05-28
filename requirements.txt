@@ -1,11 +1,11 @@
 # PDF Parsing
-docling>=2.0.0
+pymupdf4llm>=0.3.0
 pdfx>=0.1.0
 
 # RAG Engine
 lightrag-hku>=1.0.0
 
-# API Client (OpenAI SDK works with OpenRouter for embeddings, LLM, reranking)
+# API Client (OpenAI SDK works with OpenRouter)
 openai>=1.0.0
 
 # Utilities

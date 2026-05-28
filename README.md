@@ -67,7 +67,7 @@ python src/main.py --mode query \
 rag-pipeline/
 ├── src/
 │   ├── __init__.py
-│   ├── parser.py         # Docling + PDFx parsing
+│   ├── parser.py         # Marker-PDF + PDFx parsing
 │   ├── citation_map.py   # Build citation map
 │   ├── config.py        # LightRAG + OpenRouter config
 │   └── main.py          # Main pipeline
@@ -81,8 +81,8 @@ rag-pipeline/
 
 ## Features
 
-- **Docling**: Multi-column text extraction, tables, formulas
-- **PDFx**: Authors, references, DOIs extraction
+- **Marker-PDF**: Fast Markdown conversion, tables, formulas, OCR
+- **PDFx**: Authors, references, DOIs, citations extraction
 - **LightRAG**: Knowledge graph + vector search
 - **Citation Map**: Enriches answers with full citations
 - **Reranking**: Improved retrieval quality
