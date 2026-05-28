@@ -414,13 +414,40 @@ All chunks from same document share the same `reference_id` (file-level citation
 working_dir = Path(__file__).parent / "working_dir"  # For scripts in src/
 ```
 
-### 2. Cache Stale Data
+### 2. Cache Behavior & Resume
 
-**Issue**: `all_parsed.json` caches parsed PDFs. When re-indexing different PDFs, old cached data is used.
+**Cache Locations:**
+
+| Location | Contents | Survives Interrupt? |
+|----------|----------|---------------------|
+| `data/processed/*.json` | Individual parsed PDFs | ✅ YES (saved per PDF) |
+| `data/processed/all_parsed.json` | Combined parse output | ❌ NO (saved at end) |
+| `src/working_dir/` | LightRAG index | ❌ NO (built incrementally) |
+
+**Resume Functionality:**
+- Parser checks for existing `*.json` files before parsing
+- Cached PDFs are loaded from disk, not re-parsed
+- Only new/missing PDFs are parsed
+- Corrupted cache files are automatically re-parsed
 
 **Symptom**: Query returns content from wrong PDF despite fresh indexing.
 
-**Fix**: `main.py` now saves fresh cache on each run. Use `--reindex` flag to force fresh parsing.
+**Fix**: Clear cache before re-indexing:
+```bash
+# Full clean (nuclear option)
+rm -rf data/processed/*.json src/working_dir/*
+
+# Clear only LightRAG index (keep parsed PDFs)
+rm -rf src/working_dir/*
+
+# Clear only parsed cache (re-parse PDFs, keep index)
+rm -rf data/processed/*.json
+```
+
+**Verify cache state:**
+```bash
+ls data/processed/*.json | wc -l  # Should show 32 when complete
+```
 
 ### 3. LightRAG Duplicate Detection
 

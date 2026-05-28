@@ -6,6 +6,65 @@
 
 ---
 
+## Change: Resume Functionality (Parser)
+
+**Date**: 2026-05-28  
+**Reason**: Indexing 32 PDFs takes ~15 min; interrupting lost all progress
+
+### Behavior
+
+| Scenario | Before | After |
+|----------|--------|-------|
+| First run | Parse all, save all | Parse all, save all |
+| Interrupt at PDF #15 | 0 saved (all lost) | 15 saved individually |
+| Resume after interrupt | Re-parse all 32 | Skip 15 cached, parse remaining 17 |
+| Corrupted cache file | Crash | Re-parse that PDF |
+
+### How It Works
+
+1. **Individual JSON files** saved per PDF in `data/processed/{stem}.json`
+2. **Before parsing**, check if JSON exists → load from cache if valid
+3. **After all PDFs**, save combined `all_parsed.json`
+4. **On resume**, cached PDFs are skipped, only new ones parsed
+
+### Cache Locations
+
+| Location | Contents | Survives Interrupt? |
+|----------|----------|---------------------|
+| `data/processed/*.json` | Individual parsed PDFs | ✅ YES (saved per PDF) |
+| `data/processed/all_parsed.json` | Combined parse output | ❌ NO (saved at end) |
+| `src/working_dir/` | LightRAG index | ❌ NO (built incrementally) |
+
+### Files Changed
+
+| # | File | Change |
+|---|------|--------|
+| 1 | `src/parser.py` | `parse_pdfs()` now checks for cached JSON before parsing |
+
+### Manual Cache Clear
+
+```bash
+# Clear all cache (full re-index required)
+rm -rf data/processed/*.json src/working_dir/*
+
+# Clear only LightRAG index (keep parsed PDFs)
+rm -rf src/working_dir/*
+
+# Clear only parsed cache (re-parse PDFs, keep index)
+rm -rf data/processed/*.json
+```
+
+### Verify Cache State
+
+```bash
+# Count parsed PDFs
+ls data/processed/*.json | wc -l
+
+# Should show 32 when complete
+```
+
+---
+
 ## How to Use
 
 1. Before making a change, search this doc for related dependencies

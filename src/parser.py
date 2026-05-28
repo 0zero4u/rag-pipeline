@@ -242,7 +242,7 @@ def parse_single_pdf(pdf_path: str) -> ParsedPDF:
 
 def parse_pdfs(pdf_dir: str, output_dir: str, recursive: bool = True) -> list[ParsedPDF]:
     """
-    Parse all PDFs in a directory. Metadata extraction is done separately via extract_metadata_batch.
+    Parse all PDFs in a directory. Supports resume — skips already-parsed PDFs.
 
     Args:
         pdf_dir: Directory containing PDFs
@@ -263,14 +263,26 @@ def parse_pdfs(pdf_dir: str, output_dir: str, recursive: bool = True) -> list[Pa
 
     print(f"Found {len(pdf_paths)} PDFs in {pdf_dir}")
 
+    # Resume: load already-parsed PDFs
     parsed_pdfs = []
+    skipped = 0
+    for pdf_path in pdf_paths:
+        output_file = output_dir / f"{Path(pdf_path).stem}.json"
+        if output_file.exists():
+            # Load cached parse
+            try:
+                with open(output_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                parsed_pdfs.append(ParsedPDF(**data))
+                skipped += 1
+                continue
+            except Exception:
+                pass  # Corrupted cache, re-parse
 
-    for pdf_path in tqdm(pdf_paths, desc="Parsing PDFs"):
         try:
             parsed = parse_single_pdf(str(pdf_path))
             parsed_pdfs.append(parsed)
 
-            output_file = output_dir / f"{Path(pdf_path).stem}.json"
             with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(asdict(parsed), f, indent=2, ensure_ascii=False, cls=PDFEncoder)
 
@@ -278,11 +290,12 @@ def parse_pdfs(pdf_dir: str, output_dir: str, recursive: bool = True) -> list[Pa
             print(f"Error processing {pdf_path}: {e}")
             continue
 
+    # Save combined output
     combined_output = output_dir / "all_parsed.json"
     with open(combined_output, 'w', encoding='utf-8') as f:
         json.dump([asdict(p) for p in parsed_pdfs], f, indent=2, ensure_ascii=False, cls=PDFEncoder)
 
-    print(f"Saved results to {output_dir}")
+    print(f"Saved {len(parsed_pdfs)} PDFs ({skipped} cached, {len(parsed_pdfs) - skipped} newly parsed)")
     return parsed_pdfs
 
 
