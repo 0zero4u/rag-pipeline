@@ -223,7 +223,7 @@ async def main():
     # Models
     parser.add_argument('--embedding-model', default='perplexity/pplx-embed-v1-0.6b',
                         help='OpenRouter embedding model')
-    parser.add_argument('--llm-model', default='google/gemini-3.5-flash',
+    parser.add_argument('--llm-model', default='deepseek/deepseek-v4-flash',
                         help='OpenRouter LLM model')
     
     # Options
