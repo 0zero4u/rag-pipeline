@@ -18,7 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 
-async def query_chunks(query: str, top_k: int = 5) -> list[dict]:
+async def query_chunks(query: str, top_k: int = 150) -> list[dict]:
     """
     Query LightRAG and return relevant chunks.
 
@@ -91,7 +91,7 @@ def main():
         return
 
     query = sys.argv[1]
-    top_k = int(sys.argv[2]) if len(sys.argv) > 2 else 5
+    top_k = int(sys.argv[2]) if len(sys.argv) > 2 else 150
 
     chunks = asyncio.run(query_chunks(query, top_k))
     print(json.dumps(chunks, indent=2))

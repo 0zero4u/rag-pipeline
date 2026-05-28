@@ -90,7 +90,7 @@ async def test_query_chunks_handles_lightrag_failure():
         "config.initialize_lightrag",
         AsyncMock(side_effect=RuntimeError("API connection failed")),
     ):
-        result = await query_chunks("test query", top_k=5)
+        result = await query_chunks("test query", top_k=150)
 
     assert isinstance(result, list)
     assert len(result) == 1, (
@@ -156,7 +156,7 @@ async def test_query_chunks_returns_minimum_one_chunk(mock_lightrag):
     mock_config = {"rag": mock_lightrag}
 
     with patch("config.initialize_lightrag", AsyncMock(return_value=mock_config)):
-        result = await query_chunks("empty result test", top_k=5)
+        result = await query_chunks("empty result test", top_k=150)
 
     assert isinstance(result, list)
     assert len(result) == 1, (
