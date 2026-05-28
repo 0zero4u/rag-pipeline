@@ -111,7 +111,10 @@ def create_llm_func(
             max_tokens=max_tokens
         )
 
-        return response.choices[0].message.content
+        content = response.choices[0].message.content
+        if content is None:
+            content = ""
+        return content
 
     return generate
 
