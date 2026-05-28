@@ -128,7 +128,7 @@ def parse_pdf_with_pymupdf4llm(pdf_path: str) -> dict:
     """
     try:
         if PYMUPDF4LLM_AVAILABLE:
-            md = pymupdf4llm.to_markdown(pdf_path)
+            md = pymupdf4llm.to_markdown(pdf_path, use_ocr=False)
             content = md
         else:
             import pymupdf
