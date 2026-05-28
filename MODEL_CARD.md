@@ -68,24 +68,31 @@ OpenRouter API
 
 ### OpenRouter (Our Provider)
 
-| Model | Limit | Notes |
-|-------|-------|-------|
-| `deepseek/deepseek-v4-flash` | Concurrent requests | Check X-RateLimit headers |
-| `google/gemini-3.5-flash` | Concurrent requests | Rate limited (avoid) |
+**Your Account**: $4 balance, $6.71 total spent → **Paid tier**
 
-**If rate limited (429 error)**:
-1. Wait for reset (check `X-RateLimit-Reset` header)
-2. Reduce concurrent workers in `config.py`
-3. Add delay between requests (currently 0.5s)
+| Tier | Requests/Day | Requests/Min |
+|------|--------------|--------------|
+| Free (no payments) | 50 | 20 |
+| **Paid ($10+ purchased)** | **1000** | **20** |
+| Paid models | No OpenRouter limit | Upstream may throttle |
 
-### DeepSeek Direct API (Reference)
+**Source**: [OpenRouter Rate Limits](https://openrouter.zendesk.com/hc/en-us/articles/39501163636379)
+
+### DeepSeek Upstream (Our Model Provider)
 
 | Model | Concurrency | Source |
 |-------|-------------|--------|
-| `deepseek-v4-pro` | 500 concurrent | [DeepSeek Docs](https://api-docs.deepseek.com/quick_start/rate_limit) |
 | `deepseek-v4-flash` | 2500 concurrent | [DeepSeek Docs](https://api-docs.deepseek.com/quick_start/rate_limit) |
 
-**Note**: We use OpenRouter, not DeepSeek directly. OpenRouter aggregates multiple providers.
+**Important**: 429 errors are likely **upstream DeepSeek throttling**, not OpenRouter limits.
+
+### If Rate Limited (429 Error)
+
+1. Check `X-RateLimit-Remaining` header
+2. Wait for `X-RateLimit-Reset` timestamp
+3. Reduce concurrent workers in `config.py`
+4. Add delay between requests (currently 0.5s)
+5. Consider switching to `deepseek-v4-pro` (500 concurrent vs 2500)
 
 ---
 
