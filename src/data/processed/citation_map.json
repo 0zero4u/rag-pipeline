@@ -1,22 +1,42 @@
 {
   "citations": {
-    "study_material_1770263377.pdf": {
-      "filename": "study_material_1770263377.pdf",
-      "title": "study_material_1770263377.pdf",
-      "authors": [],
-      "year": null,
+    "91-priyanka-gupta.pdf": {
+      "filename": "91-priyanka-gupta.pdf",
+      "title": "STUDY OF PARTITION IN TRAIN TO PAKISTAN (1956) AND A BEND IN THE GANGES (1965)",
+      "authors": [
+        "Priyanka Gupta"
+      ],
+      "year": "2014",
       "doi": "",
-      "reference_keys": []
-    },
-    "Train_to_Pakistan_against_Mainstream_Rep.pdf": {
-      "filename": "Train_to_Pakistan_against_Mainstream_Rep.pdf",
-      "title": "Train_to_Pakistan_against_Mainstream_Rep.pdf",
-      "authors": [],
-      "year": null,
-      "doi": "",
-      "reference_keys": []
+      "reference_keys": [
+        "Unknown-n.d.",
+        "Unknown-n.d.",
+        "Unknown-n.d.",
+        "Unknown-n.d.",
+        "Unknown-n.d.",
+        "Unknown-n.d.",
+        "Unknown-n.d.",
+        "Unknown-n.d.",
+        "Unknown-n.d.",
+        "Unknown-n.d.",
+        "Unknown-n.d.",
+        "Unknown-n.d.",
+        "Unknown-n.d.",
+        "Unknown-n.d.",
+        "Unknown-n.d.",
+        "Unknown-n.d.",
+        "Unknown-n.d."
+      ]
     }
   },
-  "author_index": {},
-  "year_index": {}
+  "author_index": {
+    "Priyanka Gupta": [
+      "91-priyanka-gupta.pdf"
+    ]
+  },
+  "year_index": {
+    "2014": [
+      "91-priyanka-gupta.pdf"
+    ]
+  }
 }

@@ -42,9 +42,15 @@ async def run_pipeline(
     
     # Step 1: Parse PDFs
     print("\n[1/4] Parsing PDFs with pymupdf4llm + PDFx...")
+    
+    # Create LLM function for metadata extraction
+    from config import create_llm_func
+    llm_func = create_llm_func(llm_model)
+    
     parsed_pdfs = parse_pdfs(
         pdf_dir=str(pdf_dir),
-        output_dir=str(output_dir)
+        output_dir=str(output_dir),
+        llm_func=llm_func
     )
     print(f"Parsed {len(parsed_pdfs)} PDFs")
 

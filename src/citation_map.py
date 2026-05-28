@@ -32,16 +32,25 @@ class CitationMap:
     year_index: dict[str, list[str]]   # year -> filenames
 
 
-def build_reference_key(reference: dict) -> str:
+def build_reference_key(reference) -> str:
     """
     Build a unique key for a reference.
     
     Args:
-        reference: dict with author, title, year info
+        reference: dict with author, title, year info OR string reference
     
     Returns:
         String key in format "Author-Year" or "Author-nd" if no year
     """
+    # Handle string references (URLs, plain text)
+    if isinstance(reference, str):
+        # Extract from URL or text
+        import re
+        match = re.search(r'(\w+)\s*\((\d{4})\)', reference)
+        if match:
+            return f"{match.group(1)}-{match.group(2)}"
+        return f"Unknown-n.d."
+    
     authors = reference.get('authors', ['Unknown'])
     first_author = authors[0] if authors else 'Unknown'
     

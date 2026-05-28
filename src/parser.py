@@ -69,21 +69,29 @@ def extract_metadata_with_llm(start_text: str, end_text: str, llm_func: callable
     """
     import json, re
     import asyncio
+    import time
 
-    prompt = f"""You are a research librarian. Extract metadata from this academic paper.
-Return ONLY valid JSON with these exact keys:
-- "title": paper title (string)
-- "authors": list of author names (list of strings)
-- "year": publication year (string or null)
-- "abstract": first paragraph/sentence (string or null)
-- "references": list of reference strings from the references section
+    t0 = time.time()
+    
+    prompt = f"""Extract metadata from this academic paper. Return ONLY valid JSON.
 
-=== START OF PAPER ===
-{start_text[:4000]}
-=== END OF PAPER ===
-{end_text[-4000:]}
+LOOK CAREFULLY at the START of the paper for:
+- Title: Usually in large/bold text near the top
+- Authors: Usually after the title, often with affiliations
+- Year: Usually in parentheses after title or in publication info
 
-Return JSON with all fields above. If year/abstract not found, use null. If no references, use empty list."""
+LOOK at the END of the paper for:
+- References/Bibliography section
+
+=== START OF PAPER (first 2000 chars) ===
+{start_text[:2000]}
+=== END OF PAPER (last 1000 chars) ===
+{end_text[-1000:]}
+
+Return EXACTLY this JSON format:
+{{"title": "paper title", "authors": ["Author One", "Author Two"], "year": "2024", "abstract": "first paragraph", "references": []}}
+
+If you cannot find a field, use null for year or empty list for authors. Do NOT make up information."""
 
     try:
         try:
@@ -98,12 +106,20 @@ Return JSON with all fields above. If year/abstract not found, use null. If no r
                 response = future.result()
         else:
             response = asyncio.run(llm_func(prompt))
+        
+        print(f"  [Metadata] LLM response time: {time.time()-t0:.1f}s")
+        print(f"  [Metadata] Response length: {len(response)}")
+        
         match = re.search(r'\{.*\}', response, re.DOTALL)
         if match:
-            return json.loads(match.group())
+            result = json.loads(match.group())
+            print(f"  [Metadata] Extracted: title={result.get('title','?')[:50]}, authors={result.get('authors',[])}, year={result.get('year')}")
+            return result
+        
+        print(f"  [Metadata] No JSON found in response")
         return {"title": None, "authors": [], "year": None, "abstract": None, "references": []}
     except Exception as e:
-        print(f"Warning: LLM metadata extraction failed: {e}")
+        print(f"  [Metadata] LLM metadata extraction failed: {e}")
         return {"title": None, "authors": [], "year": None, "abstract": None, "references": []}
 
 
@@ -190,13 +206,14 @@ def extract_references_with_pdfx(pdf_path: str) -> list[dict]:
         return []
 
 
-def parse_single_pdf(pdf_path: str) -> ParsedPDF:
+def parse_single_pdf(pdf_path: str, llm_func: callable = None) -> ParsedPDF:
     """
     Parse a single PDF using pymupdf4llm.
     Returns content and references only. Metadata extraction is done separately.
 
     Args:
         pdf_path: Path to PDF file
+        llm_func: Optional LLM function for metadata extraction
     """
     pdf_path = str(pdf_path)
     filename = Path(pdf_path).name
@@ -216,16 +233,31 @@ def parse_single_pdf(pdf_path: str) -> ParsedPDF:
     # Also keep short first_page for backwards compatibility
     first_page_snippet = content[:2000] if content else ""
 
-    metadata = PDFMetadata(
-        title=filename,
-        authors=[],
-        year=None,
-        doi='',
-        abstract='',
-        references=references,
-        source='pending',
-        confidence='low'
-    )
+    # Extract metadata via LLM if provided
+    if llm_func and content:
+        print(f"  [Parser] Extracting metadata for {filename}...")
+        meta = extract_metadata_with_llm(start_snippet, end_snippet, llm_func)
+        metadata = PDFMetadata(
+            title=meta.get('title') or filename,
+            authors=meta.get('authors', []),
+            year=meta.get('year'),
+            doi='',
+            abstract=meta.get('abstract', ''),
+            references=references + meta.get('references', []),
+            source='llm',
+            confidence='high' if meta.get('title') else 'low'
+        )
+    else:
+        metadata = PDFMetadata(
+            title=filename,
+            authors=[],
+            year=None,
+            doi='',
+            abstract='',
+            references=references,
+            source='pending',
+            confidence='low'
+        )
 
     return ParsedPDF(
         filename=filename,
@@ -240,7 +272,7 @@ def parse_single_pdf(pdf_path: str) -> ParsedPDF:
     )
 
 
-def parse_pdfs(pdf_dir: str, output_dir: str, recursive: bool = True) -> list[ParsedPDF]:
+def parse_pdfs(pdf_dir: str, output_dir: str, recursive: bool = True, llm_func: callable = None) -> list[ParsedPDF]:
     """
     Parse all PDFs in a directory. Supports resume — skips already-parsed PDFs.
 
@@ -248,6 +280,7 @@ def parse_pdfs(pdf_dir: str, output_dir: str, recursive: bool = True) -> list[Pa
         pdf_dir: Directory containing PDFs
         output_dir: Directory to save parsed results
         recursive: Whether to search recursively
+        llm_func: Optional LLM function for metadata extraction
 
     Returns:
         List of ParsedPDF objects
@@ -280,7 +313,7 @@ def parse_pdfs(pdf_dir: str, output_dir: str, recursive: bool = True) -> list[Pa
                 pass  # Corrupted cache, re-parse
 
         try:
-            parsed = parse_single_pdf(str(pdf_path))
+            parsed = parse_single_pdf(str(pdf_path), llm_func=llm_func)
             parsed_pdfs.append(parsed)
 
             with open(output_file, 'w', encoding='utf-8') as f:
