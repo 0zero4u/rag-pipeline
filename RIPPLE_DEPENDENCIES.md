@@ -6,6 +6,45 @@
 
 ---
 
+## Change: GLiNER Entity Extraction
+
+**Date**: 2026-05-28  
+**Reason**: LLM entity extraction too slow (~8s/chunk), GLiNER is 40x faster (~0.2s/chunk)
+
+### Files Changed
+
+| # | File | Change |
+|---|------|--------|
+| 1 | `src/gliner_extractor.py` | NEW: GLiNER wrapper for LightRAG |
+| 2 | `src/config.py:152` | Import and wrap LLM with GLiNER |
+| 3 | `requirements.txt` | Add gliner, torch, onnxruntime |
+
+### Dependencies
+
+| Component | Depends On | Impact |
+|-----------|------------|--------|
+| GLiNER | torch, onnxruntime | ~700MB disk space |
+| LightRAG | GLiNER wrapper | Entity extraction faster |
+| Query | Knowledge graph | Graph still built (from GLiNER entities) |
+
+### GLiNER Format
+
+LightRAG expects:
+```
+entity, EntityName, EntityType, EntityDescription
+<|COMPLETE|>
+```
+
+### Performance
+
+| Metric | Before (LLM) | After (GLiNER) |
+|--------|--------------|----------------|
+| Entity extraction | ~8s/chunk | ~0.2s/chunk |
+| Insert time | ~22s | ~18s |
+| Cost | $0.01-0.15/M tokens | Free |
+
+---
+
 ## Change: Resume Functionality (Parser)
 
 **Date**: 2026-05-28  

@@ -18,7 +18,7 @@ A production-ready RAG pipeline designed to process 100+ academic research PDFs,
 │     │   • Fast Markdown conversion                              │
 │     │   • Table structure (markdown tables)                      │
 │     │   • Formula detection (LaTeX output)                      │
-│     │   • OCR for scanned PDFs (Tesseract)                       │
+│     │   • OCR DISABLED (use_ocr=False)                          │
 │     │   • No GPU required                                      │
 │     │                                                           │
 │     └─► Metadata Extraction (Start + End)                        │
@@ -35,15 +35,24 @@ A production-ready RAG pipeline designed to process 100+ academic research PDFs,
 │         • filename → {title, authors, year, abstract}           │
 │         • Source of truth for citation validation                │
 │                                                                 │
-│  3. RAG ENGINE                                                  │
+│  3. ENTITY EXTRACTION (GLiNER - CPU)                            │
+│     ├─► GLiNER (0.2s/chunk)                                    │
+│     │   • Local CPU inference                                   │
+│     │   • No API calls required                                 │
+│     │   • Extracts: Person, Organization, Location, Event, etc. │
+│     │                                                           │
+│     └─► Fallback: LLM (DeepSeek v4 Flash)                      │
+│         • Used for non-entity tasks                             │
+│                                                                 │
+│  4. RAG ENGINE                                                  │
 │     ├─► LightRAG (naive mode)                                 │
 │     │   • Vector similarity search                              │
 │     │   • Returns chunks with reference_id                      │
 │     │                                                           │
-│     └─► gemini-3.5-flash                                       │
-│         • Second LLM call for structured answer                │
+│     └─► DeepSeek v4 Flash                                      │
+│         • Query answering, citation generation                  │
 │                                                                 │
-│  4. CITATION VALIDATION                                          │
+│  5. CITATION VALIDATION                                          │
 │     └─► query_with_citations()                                 │
 │         • Validates LLM citations against citation_map.json     │
 │         • Catches hallucinations                                │

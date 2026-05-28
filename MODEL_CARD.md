@@ -9,8 +9,8 @@
 | Component | Model | Provider | Purpose | File |
 |-----------|-------|----------|---------|------|
 | **Embedding** | `perplexity/pplx-embed-v1-0.6b` | OpenRouter | Vector embeddings (1024-dim) | `config.py:111` |
-| **LLM (Primary)** | `deepseek/deepseek-v4-flash` | OpenRouter | Entity extraction, metadata | `config.py:112`, `main.py:29`, `main.py:226` |
-| **LLM (Query)** | `deepseek/deepseek-v4-flash` | OpenRouter | Query answering, citations | `config.py:112` |
+| **Entity Extraction** | `urchade/gliner_small-v2.1` | Local (CPU) | Fast entity extraction | `gliner_extractor.py` |
+| **LLM** | `deepseek/deepseek-v4-flash` | OpenRouter | Metadata, query answering | `config.py:112`, `main.py:29` |
 
 ---
 
@@ -30,12 +30,33 @@
 
 ---
 
+### Entity Extraction: GLiNER (Local CPU)
+
+| Property | Value |
+|----------|-------|
+| Model | `urchade/gliner_small-v2.1` |
+| Size | ~500MB |
+| Speed | ~0.2s/chunk |
+| Cost | Free (local) |
+| Labels | Person, Organization, Location, Event, Date, Book, Concept |
+
+**Where used**: `gliner_extractor.py` → `extract_entities_gliner()`
+
+**Performance comparison:**
+
+| Method | Speed | Cost | Quality |
+|--------|-------|------|---------|
+| **GLiNER** | ~0.2s/chunk | Free | Good |
+| **LLM** | ~8s/chunk | $0.01-0.15/M tokens | Excellent |
+
+---
+
 ### LLM: deepseek/deepseek-v4-flash
 
 | Property | Value |
 |----------|-------|
 | Context window | 128K tokens |
-| Use case | Entity extraction, metadata extraction, query answering |
+| Use case | Metadata extraction, query answering |
 | Speed | Fast |
 | Cost | Low |
 
