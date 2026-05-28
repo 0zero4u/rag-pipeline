@@ -497,7 +497,20 @@ rm -rf /home/arshhtripathi/rag-pipeline/src/working_dir/*
 
 **If rate limited**: Increase delay in `config.py` or wait for reset.
 
-### 8. Multi-PDF Retrieval Behavior
+### 8. Qwen3 Embedding
+
+**Status**: ✅ Active (2026-05-28)
+
+**How it works**: Uses `qwen/qwen3-embedding-8b` (4096-dim) for better vague query results.
+
+**Configuration**: 
+- Embedding model saved to `working_dir/config.json` during indexing
+- Query writer loads config to use correct embedding model
+- Dimensions auto-detected via test call
+
+**If embedding fails**: Check embedding model name in `working_dir/config.json`.
+
+### 9. Multi-PDF Retrieval Behavior
 
 **Behavior**: When multiple PDFs are indexed, `top_k=5` returns the 5 most similar chunks from **ALL indexed PDFs**, not top 5 per PDF.
 

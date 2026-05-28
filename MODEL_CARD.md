@@ -8,25 +8,27 @@
 
 | Component | Model | Provider | Purpose | File |
 |-----------|-------|----------|---------|------|
-| **Embedding** | `perplexity/pplx-embed-v1-0.6b` | OpenRouter | Vector embeddings (1024-dim) | `config.py:111` |
+| **Embedding** | `qwen/qwen3-embedding-8b` | OpenRouter | Vector embeddings (4096-dim) | `config.py:31` |
 | **Entity Extraction** | `urchade/gliner_small-v2.1` | Local (CPU) | Fast entity extraction | `gliner_extractor.py` |
-| **LLM** | `deepseek/deepseek-v4-flash` | OpenRouter | Metadata, query answering | `config.py:112`, `main.py:29` |
+| **LLM** | `deepseek/deepseek-v4-flash` | OpenRouter | Metadata, query answering | `config.py:65`, `main.py:29` |
 
 ---
 
 ## Model Details
 
-### Embedding: perplexity/pplx-embed-v1-0.6b
+### Embedding: qwen/qwen3-embedding-8b
 
 | Property | Value |
 |----------|-------|
-| Dimension | 1024 |
-| Max tokens | 8192 |
+| Dimension | 4096 (auto-detected) |
+| Max tokens | 32K |
 | Use case | Document chunk embedding |
 | Speed | Fast |
-| Cost | Low |
+| Cost | $0.01/M tokens |
 
 **Where used**: `config.py` → `create_embedding_func()`
+
+**Note**: Dimensions auto-detected via test call. Config saved to `working_dir/config.json`.
 
 ---
 

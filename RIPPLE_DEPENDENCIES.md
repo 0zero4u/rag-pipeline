@@ -6,6 +6,34 @@
 
 ---
 
+## Change: Qwen3 Embedding
+
+**Date**: 2026-05-28  
+**Reason**: Better vague query results with higher-dimensional embeddings
+
+### Files Changed
+
+| # | File | Change |
+|---|------|--------|
+| 1 | `src/config.py:31` | Default embedding changed to `qwen/qwen3-embedding-8b` |
+| 2 | `src/config.py:57-61` | Auto-detect embedding dimensions |
+| 3 | `src/query_writer.py:39-47` | Load saved embedding model config |
+
+### How It Works
+
+1. During indexing, embedding model is saved to `working_dir/config.json`
+2. Query writer loads config to use correct embedding model
+3. Dimensions auto-detected via test call
+
+### Embedding Comparison
+
+| Model | Dimensions | Vague Query Performance |
+|-------|------------|------------------------|
+| `perplexity/pplx-embed-v1-0.6b` | 1024 | Poor |
+| `qwen/qwen3-embedding-8b` | 4096 | Good |
+
+---
+
 ## Change: GLiNER Entity Extraction
 
 **Date**: 2026-05-28  
