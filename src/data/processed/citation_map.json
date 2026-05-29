@@ -1,20 +1,19 @@
 {
   "citations": {
-    "91-priyanka-gupta.pdf": {
-      "filename": "91-priyanka-gupta.pdf",
-      "title": "STUDY OF PARTITION IN TRAIN TO PAKISTAN (1956) AND A BEND IN THE GANGES (1965)",
+    "Train_to_Pakistan_against_Mainstream_Rep.pdf": {
+      "filename": "Train_to_Pakistan_against_Mainstream_Rep.pdf",
+      "title": "Train to Pakistan : against Mainstream Representations of the Partition of India?",
       "authors": [
-        "Priyanka Gupta"
+        "Marc Chatterji"
       ],
-      "year": "2014",
+      "year": null,
       "doi": null,
-      "journal": "Research Scholar An International Refereed e-Journal of Literary Explorations",
-      "volume": "2",
-      "issue": "IV",
-      "pages": "587",
+      "journal": null,
+      "volume": null,
+      "issue": null,
+      "pages": null,
       "publisher": null,
       "reference_keys": [
-        "Unknown-n.d.",
         "Unknown-n.d.",
         "Unknown-n.d.",
         "Unknown-n.d.",
@@ -26,13 +25,9 @@
     }
   },
   "author_index": {
-    "Priyanka Gupta": [
-      "91-priyanka-gupta.pdf"
+    "Marc Chatterji": [
+      "Train_to_Pakistan_against_Mainstream_Rep.pdf"
     ]
   },
-  "year_index": {
-    "2014": [
-      "91-priyanka-gupta.pdf"
-    ]
-  }
+  "year_index": {}
 }

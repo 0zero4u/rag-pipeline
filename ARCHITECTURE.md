@@ -717,36 +717,43 @@ asyncio.run(main())
 
 ---
 
-## 3-Agent Citation Pipeline
+## 2-Agent Citation Pipeline (Optimized)
 
 ### Workflow
 
 ```
-1. LightRAGWriterAgent
-   └── Writes prose with [CHUNK-N] markers
+1. LightRAGWriterAgent (Write)
+   └── Queries RAG, writes prose with [CHUNK-N] markers
        └── Uses RAG via query_writer.py
+       └── Outputs: /tmp/draft.md + /tmp/write_output.json
 
-2. HumanizeAgent
-    └── Paraphrases prose, removes AI patterns
+2. HumanizeAgent (Polish)
+    └── Phase 1: Humanize prose, remove AI patterns
         └── PRESERVES [CHUNK-N] markers
-            └── Does NOT use RAG (receives ready content)
-
-3. CitationAdderAgent
-    └── Converts [CHUNK-N] to MLA inline citations
+    └── Phase 2: Convert [CHUNK-N] to MLA inline citations
         └── Reads citation_map.json for metadata
-            └── Does NOT use RAG
+    └── Outputs: /tmp/polished.md
 
-4. Validation (check_citations.py)
+3. Validation (check_citations.py)
     └── Verifies no orphaned [CHUNK-N] remain
 ```
 
 ### Agent Files
 
-| Agent | Location |
-|-------|----------|
-| LightRAGWriterAgent | `~/.config/opencode/agents/lightrag-writer-agent.md` |
-| HumanizeAgent | `~/.config/opencode/agents/humanize-agent.md` |
-| CitationAdderAgent | `~/.config/opencode/agents/citation-adder-agent.md` |
+| Agent | Location | Purpose |
+|-------|----------|---------|
+| LightRAGWriterAgent | `~/.config/opencode/agents/lightrag-writer-agent.md` | RAG query + write |
+| HumanizeAgent | `~/.config/opencode/agents/humanize-agent.md` | Humanize + MLA convert |
+
+### Alternative: 3-Agent Pipeline (Legacy)
+
+For backward compatibility, the original 3-agent flow still works:
+
+```
+1. LightRAGWriterAgent → writes with [CHUNK-N]
+2. HumanizeAgent → paraphrases, preserves markers
+3. CitationAdderAgent → converts [CHUNK-N] to MLA
+```
 
 ### MLA Citation Format
 
@@ -771,21 +778,23 @@ python3 check_citations.py /tmp/final_draft.md
 | Component | Status | Notes |
 |----------|--------|-------|
 | pymupdf4llm | ✅ Complete | Primary content extractor |
-| LLM metadata | ✅ Complete | gemini-3.5-flash |
+| LLM metadata | ✅ Complete | deepseek-v4-flash |
 | PDFx references | ✅ Complete | Bibliography only |
 | citation_map.json | ✅ Complete | Ground truth for validation |
 | LightRAG | ✅ Complete | Naive mode for Q&A |
 | Embeddings | ✅ Complete | perplexity/pplx-embed-v1-0.6b |
+| GLiNER | ✅ Complete | CPU entity extraction (0.2s/chunk) |
 | query_writer.py | ✅ Complete | chunk_index for citations |
 | validate_citations.py | ✅ Complete | --max-chunks flag |
 | check_citations.py | ✅ Complete | orphaned [CHUNK-N] validator |
-| LightRAGWriterAgent | ✅ Complete | writes with [CHUNK-N] |
-| HumanizeAgent | ✅ Complete | paraphrase, preserve markers |
-| CitationAdderAgent | ✅ Complete | MLA conversion |
+| LightRAGWriterAgent | ✅ Complete | RAG query + write with [CHUNK-N] |
+| HumanizeAgent | ✅ Complete | Humanize + MLA conversion (2-in-1) |
+| CitationAdderAgent | ✅ Complete | Legacy MLA conversion |
+| convert_b_markers.py | ✅ Complete | [B_NNN] → MLA for existing chapters |
 | Cohere Rerank | ❌ Not needed | LightRAG similarity sufficient |
 | auditor.py | ❌ Not used | validate_citations.py in use |
 
-**Architecture: 100% Resolved**
+**Architecture: Optimized 2-Agent Pipeline**
 
 ---
 

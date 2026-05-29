@@ -118,6 +118,7 @@ If you cannot find a field, use null. Do NOT make up information."""
         
         print(f"  [Metadata] LLM response time: {time.time()-t0:.1f}s")
         print(f"  [Metadata] Response length: {len(response)}")
+        print(f"  [Metadata] Response preview: {response[:500]}")
         
         match = re.search(r'\{.*\}', response, re.DOTALL)
         if match:
