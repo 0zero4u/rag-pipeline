@@ -1,4 +1,4 @@
-# Research Swarm Pipeline — Simplified for Dissertation Writing
+
 
 **Last Updated:** 2026-05-26  
 **Status:** Ready for Implementation (v2 — Simplified)
